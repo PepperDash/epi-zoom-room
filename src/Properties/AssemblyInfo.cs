@@ -1,8 +1,8 @@
 ﻿using System.Reflection;
 
-[assembly: AssemblyTitle("EssentialsPluginTemplateEpi")]
+[assembly: AssemblyTitle("PDT.Plugins.Zoom.Room")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("EssentialsPluginTemplateEpi")]
-[assembly: AssemblyCopyright("Copyright ©  2022")]
+[assembly: AssemblyProduct("PDT.Plugins.Zoom.Room")]
+[assembly: AssemblyCopyright("Copyright ©  2023")]
 [assembly: AssemblyVersion("1.0.0.*")]
 
