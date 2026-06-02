@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PepperDash.Essentials.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
 {
     /// <summary>
     /// Used to track the current status of a ZoomRoom

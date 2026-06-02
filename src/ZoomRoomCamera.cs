@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Devices.Common.Cameras;
 
-namespace PepperDash.Essentials.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
 {
     public class ZoomRoomCamera : CameraBase, IHasCameraPtzControl, IHasCameraControls, IBridgeAdvanced
     {

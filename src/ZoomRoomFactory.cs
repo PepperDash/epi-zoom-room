@@ -5,7 +5,7 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
 using Serilog.Events;
 
-namespace PepperDash.Essentials.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
 {
     public class ZoomRoomFactory : EssentialsPluginDeviceFactory<ZoomRoom>
     {

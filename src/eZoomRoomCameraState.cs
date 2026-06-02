@@ -1,4 +1,4 @@
-namespace PepperDash.Essentials.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
 {
     public enum eZoomRoomCameraState
     {

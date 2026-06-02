@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
 using PepperDash.Essentials.Devices.Common.Codec;
 
-namespace PepperDash.Essentials.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
 {
     /// <summary>
     /// Zoom Room specific info object
