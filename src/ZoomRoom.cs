@@ -9,6 +9,7 @@ using Crestron.SimplSharpPro.DeviceSupport;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PepperDash.Core;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Config;
@@ -24,8 +25,7 @@ using PepperDash.Essentials.Devices.Common.VideoCodec.Interfaces;
 namespace PDT.Plugins.Zoom.Room
 {
 	public class ZoomRoom : VideoCodecBase, IHasCodecSelfView, IHasDirectoryHistoryStack, ICommunicationMonitor,
-		IRouting,
-        IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
+		IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
 		IHasFarEndContentStatus, IHasSelfviewPosition, IHasPhoneDialing, IHasZoomRoomLayouts, IHasParticipantPinUnpin,
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
         IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions
@@ -57,7 +57,7 @@ namespace PDT.Plugins.Zoom.Room
 		private bool _jsonFeedbackMessageIsIncoming;
 		private StringBuilder _jsonMessage;
 		private int _previousVolumeLevel;
-		private CameraBase _selectedCamera;
+		private IHasCameraControls _selectedCamera;
         private string _lastDialedMeetingNumber;
 
         private CTimer contactsDebounceTimer;
@@ -83,7 +83,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			_props = JsonConvert.DeserializeObject<ZoomRoomPropertiesConfig>(config.Properties.ToString());
 
-			_receiveQueue = new GenericQueue(Key + "-rxQueue", Thread.eThreadPriority.MediumPriority, 2048);
+			_receiveQueue = new GenericQueue(Key + "-rxQueue", System.Threading.ThreadPriority.AboveNormal, 2048);
 
 			Communication = comm;
 
@@ -158,7 +158,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			SetUpFeedbackActions();
 
-			Cameras = new List<CameraBase>();
+			Cameras = new List<IHasCameraControls>();
 
 			SetUpDirectory();
 
@@ -211,7 +211,7 @@ namespace PDT.Plugins.Zoom.Room
 
 					if (Configuration.Audio.Output.Volume != 0)
 					{
-						Debug.Console(2, this, "Storing previous volume level as: {0}, scaled: {1}", Configuration.Audio.Output.Volume,
+						this.LogDebug("Storing previous volume level as: {Volume}, scaled: {ScaledVol}", Configuration.Audio.Output.Volume,
 							scaledVol);
 						_previousVolumeLevel = scaledVol; // Store the previous level for recall
 					}
@@ -353,11 +353,11 @@ namespace PDT.Plugins.Zoom.Room
 
 		#region IHasCodecCameras Members
 
-		public event EventHandler<CameraSelectedEventArgs> CameraSelected;
+		public event EventHandler<CameraSelectedEventArgs<IHasCameraControls>> CameraSelected;
 
-		public List<CameraBase> Cameras { get; private set; }
+		public List<IHasCameraControls> Cameras { get; private set; }
 
-		public CameraBase SelectedCamera
+		public IHasCameraControls SelectedCamera
 		{
 			get { return _selectedCamera; }
 			private set
@@ -369,7 +369,7 @@ namespace PDT.Plugins.Zoom.Room
 				var handler = CameraSelected;
 				if (handler != null)
 				{
-					handler(this, new CameraSelectedEventArgs(_selectedCamera));
+					handler(this, new CameraSelectedEventArgs<IHasCameraControls>(_selectedCamera));
 				}
 			}
 		}
@@ -438,7 +438,7 @@ namespace PDT.Plugins.Zoom.Room
 			{
 				_currentDirectoryResult = value;
 
-				Debug.Console(2, this, "CurrentDirectoryResult Updated.  ResultsFolderId: {0}  Contact Count: {1}",
+				this.LogDebug("CurrentDirectoryResult Updated.  ResultsFolderId: {ResultsFolderId}  Contact Count: {ContactCount}",
 					_currentDirectoryResult.ResultsFolderId, _currentDirectoryResult.CurrentDirectoryResults.Count);
 
 				OnDirectoryResultReturned(_currentDirectoryResult);
@@ -567,7 +567,7 @@ namespace PDT.Plugins.Zoom.Room
             {
                 case "Info":
                     {
-                        Debug.Console(1, this, "Updating Call Status");
+                        this.LogInformation("Updating Call Status");
                         UpdateCallStatus();
                         break;
                     }
@@ -605,8 +605,8 @@ namespace PDT.Plugins.Zoom.Room
             }
             catch (Exception e)
             {
-                Debug.Console(1, this, "Error processing state property update. {0}", e.Message);
-                Debug.Console(2, this, e.StackTrace);
+                this.LogInformation("Error processing state property update. {Message}", e.Message);
+                this.LogDebug("{StackTrace}", e.StackTrace);
                 MeetingInfo = new MeetingInfo("", "", "", "", "None", false, false, false, MeetingIsLockedFeedback.BoolValue, MeetingIsRecordingFeedback.BoolValue, false);
             }
 	    }
@@ -655,7 +655,7 @@ namespace PDT.Plugins.Zoom.Room
                     var camera = Cameras.FirstOrDefault(c => c.Key.IndexOf(Configuration.Video.Camera.SelectedId, StringComparison.OrdinalIgnoreCase) > -1);
                     if (camera != null)
                     {
-                        Debug.Console(1, this, "Camera selected with key: '{0}'", camera.Key);
+                        this.LogInformation("Camera selected with key: '{CameraKey}'", camera.Key);
 
                         SelectedCamera = camera;
 
@@ -666,14 +666,14 @@ namespace PDT.Plugins.Zoom.Room
                     }
                     else
                     {
-                        Debug.Console(1, this, "No camera found with key: '{0}'", Configuration.Video.Camera.SelectedId);
+                        this.LogInformation("No camera found with key: '{SelectedId}'", Configuration.Video.Camera.SelectedId);
                     }
 				}
 			};
 
 			Configuration.Call.Camera.PropertyChanged += (o, a) =>
 			{
-				Debug.Console(1, this, "Configuration.Call.Camera.PropertyChanged: {0}", a.PropertyName);
+				this.LogInformation("Configuration.Call.Camera.PropertyChanged: {PropertyName}", a.PropertyName);
 
 				if (a.PropertyName != "Mute") return;
 
@@ -777,7 +777,7 @@ namespace PDT.Plugins.Zoom.Room
 						break;
                     case "isSharingBlackMagic":
                         {
-                            Debug.Console(2, this, "Updating sharing status: {0}", a.PropertyName);
+                            this.LogDebug("Updating sharing status: {PropertyName}", a.PropertyName);
 
                             SharingContentIsOnFeedback.FireUpdate();
                             if (MeetingInfo == null)
@@ -807,18 +807,18 @@ namespace PDT.Plugins.Zoom.Room
 				switch (a.PropertyName)
 				{
 					case "IsIncomingCall":
-						Debug.Console(1, this, "Incoming Phone Call: {0}", Status.PhoneCall.IsIncomingCall);
+						this.LogInformation("Incoming Phone Call: {IsIncomingCall}", Status.PhoneCall.IsIncomingCall);
 						break;
 					case "PeerDisplayName":
-						Debug.Console(1, this, "Peer Display Name: {0}", Status.PhoneCall.PeerDisplayName);
+						this.LogInformation("Peer Display Name: {PeerDisplayName}", Status.PhoneCall.PeerDisplayName);
 						CallerIdNameFeedback.FireUpdate();
 						break;
 					case "PeerNumber":
-						Debug.Console(1, this, "Peer Number: {0}", Status.PhoneCall.PeerNumber);
+						this.LogInformation("Peer Number: {PeerNumber}", Status.PhoneCall.PeerNumber);
 						CallerIdNumberFeedback.FireUpdate();
 						break;
 					case "OffHook":
-						Debug.Console(1, this, "Phone is OffHook: {0}", Status.PhoneCall.OffHook);
+						this.LogInformation("Phone is OffHook: {OffHook}", Status.PhoneCall.OffHook);
 						PhoneOffHookFeedback.FireUpdate();
 						break;
 				}
@@ -826,7 +826,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			Status.Layout.PropertyChanged += (o, a) =>
 			{
-				Debug.Console(1, this, "Status.Layout.PropertyChanged a.PropertyName: {0}", a.PropertyName);
+				this.LogInformation("Status.Layout.PropertyChanged a.PropertyName: {PropertyName}", a.PropertyName);
 				switch (a.PropertyName.ToLower())
 				{
 					case "can_Switch_speaker_view":
@@ -911,7 +911,7 @@ namespace PDT.Plugins.Zoom.Room
 		/// Starts the HTTP feedback server and syncronizes state of codec
 		/// </summary>
 		/// <returns></returns>
-		public override bool CustomActivate()
+		protected override bool CustomActivate()
 		{
 			CrestronConsole.AddNewConsoleCommand(SetCommDebug, "SetCodecCommDebug", "0 for Off, 1 for on",
 				ConsoleAccessLevelEnum.AccessOperator);
@@ -932,7 +932,7 @@ namespace PDT.Plugins.Zoom.Room
 
 	    #region Overrides of Device
 
-	    public override void Initialize()
+	    protected override void Initialize()
 	    {
 	        var socket = Communication as ISocketStatus;
 			if (socket != null)
@@ -954,18 +954,18 @@ namespace PDT.Plugins.Zoom.Room
 			if (s == "1")
 			{
 				CommDebuggingIsOn = true;
-				Debug.Console(1, this, "Comm Debug Enabled.");
+				this.LogInformation("Comm Debug Enabled.");
 			}
 			else
 			{
 				CommDebuggingIsOn = false;
-				Debug.Console(1, this, "Comm Debug Disabled.");
+				this.LogInformation("Comm Debug Disabled.");
 			}
 		}
 
 		private void socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs e)
 		{
-			Debug.Console(1, this, "Socket status change {0}", e.Client.ClientStatus);
+			this.LogInformation("Socket status change {ClientStatus}", e.Client.ClientStatus);
 			if (e.Client.IsConnected)
 			{
 			}
@@ -980,19 +980,19 @@ namespace PDT.Plugins.Zoom.Room
 		{
             if (_meetingPasswordRequired)
             {
-                Debug.Console(2, this, "Blocking commands to ZoomRoom while waiting for user to enter meeting password");
+                this.LogDebug("Blocking commands to ZoomRoom while waiting for user to enter meeting password");
                 return;
             }
 
             if (_waitingForUserToAcceptOrRejectIncomingCall)
             {
-                Debug.Console(2, this, "Blocking commands to ZoomRoom while waiting for user to accept or reject incoming call");
+                this.LogDebug("Blocking commands to ZoomRoom while waiting for user to accept or reject incoming call");
                 return;
             }
 
 			if (CommDebuggingIsOn)
 			{
-				Debug.Console(1, this, "Sending: '{0}'", command);
+				this.LogInformation("Sending: '{Command}'", command);
 			}
 
 			Communication.SendText(command + SendDelimiter);
@@ -1122,7 +1122,7 @@ namespace PDT.Plugins.Zoom.Room
         {
             if (response.Contains("client_loop: send disconnect: Broken pipe"))
             {
-                Debug.Console(1, this, Debug.ErrorLogLevel.Error,
+                this.LogError(
                     "Zoom Room Controller or App connected. Essentials will NOT control the Zoom Room until it is disconnected.");
 
                 return;
@@ -1181,7 +1181,7 @@ namespace PDT.Plugins.Zoom.Room
 			// Counts the curly braces
 			if (message.Contains("client_loop: send disconnect: Broken pipe"))
 			{
-				Debug.Console(1, this, Debug.ErrorLogLevel.Error,
+				this.LogError(
 					"Zoom Room Controller or App connected. Essentials will NOT control the Zoom Room until it is disconnected.");
 
 				return;
@@ -1211,7 +1211,7 @@ namespace PDT.Plugins.Zoom.Room
 
 				if (CommDebuggingIsOn)
 				{
-					Debug.Console(2, this, "Incoming JSON message...");
+					this.LogDebug("Incoming JSON message...");
 				}
 
 				return;
@@ -1227,7 +1227,7 @@ namespace PDT.Plugins.Zoom.Room
 
 					if (CommDebuggingIsOn)
 					{
-						Debug.Console(2, this, "Complete JSON Received:\n{0}", _jsonMessage.ToString());
+						this.LogDebug("Complete JSON Received:\n{JsonMessage}", _jsonMessage.ToString());
 					}
 
 					// Forward the complete message to be deserialized
@@ -1250,7 +1250,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			if (CommDebuggingIsOn)
 			{
-				Debug.Console(1, this, "Non-JSON response: '{0}'", message);
+				this.LogInformation("Non-JSON response: '{Message}'", message);
 			}
 
 			_jsonCurlyBraceCounter = 0; // reset on non-JSON response
@@ -1327,7 +1327,7 @@ namespace PDT.Plugins.Zoom.Room
 
 				var responseObj = message[topKey];
 
-				Debug.Console(1, this, "{0} Response Received. topKey: '{1}'\n{2}", eType, topKey, responseObj.ToString().Replace("\n", CrestronEnvironment.NewLine));
+				this.LogInformation("{ResponseType} Response Received. topKey: '{TopKey}'\n{ResponseObj}", eType, topKey, responseObj.ToString().Replace("\n", CrestronEnvironment.NewLine));
 
 				switch (eType)
 				{
@@ -1391,7 +1391,7 @@ namespace PDT.Plugins.Zoom.Room
 							}
 							case "listparticipantsresult":
 							{
-								Debug.Console(1, this, "JTokenType: {0}", responseObj.Type);
+								this.LogInformation("JTokenType: {JTokenType}", responseObj.Type);
 
 								switch (responseObj.Type)
 								{
@@ -1410,11 +1410,11 @@ namespace PDT.Plugins.Zoom.Room
 
 										if (participant != null)
 										{
-											Debug.Console(1, this,
-												"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {0} **********************************",
+											this.LogInformation(
+												"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {Event} **********************************",
 												participant.Event);
-											Debug.Console(1, this,
-												"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {0} - UserId: {1} Name: {2} IsHost: {3}",
+											this.LogInformation(
+												"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {Event} - UserId: {UserId} Name: {UserName} IsHost: {IsHost}",
 												participant.Event, participant.UserId, participant.UserName, participant.IsHost);
 
 											switch (participant.Event)
@@ -1448,16 +1448,16 @@ namespace PDT.Plugins.Zoom.Room
 
 													if (existingParticipant != null)
 													{
-														Debug.Console(1, this,
-															"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {0} ...updating matching UserId participant with UserId: {1} UserName: {2}",
+														this.LogInformation(
+															"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {Event} ...updating matching UserId participant with UserId: {UserId} UserName: {UserName}",
 															participant.Event, participant.UserId, participant.UserName);
 
 														JsonConvert.PopulateObject(responseObj.ToString(), existingParticipant);
 													}
 													else
 													{
-														Debug.Console(1, this,
-															"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {0} ...adding participant with UserId: {1} UserName: {2}",
+														this.LogInformation(
+															"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {Event} ...adding participant with UserId: {UserId} UserName: {UserName}",
 															participant.Event, participant.UserId, participant.UserName);
 
 														Status.Call.Participants.Add(participant);
@@ -1467,8 +1467,8 @@ namespace PDT.Plugins.Zoom.Room
 												}
 											}
 
-											Debug.Console(1, this,
-												"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {0} ***********************************",
+											this.LogInformation(
+												"[DeserializeResponse] zCommands.listparticipantresult - participant.event: {Event} ***********************************",
 												participant.Event);
 										}
 									}
@@ -1640,9 +1640,9 @@ namespace PDT.Plugins.Zoom.Room
 								var disconnectEvent =
 									JsonConvert.DeserializeObject<zEvent.CallDisconnect>(responseObj.ToString());
 
-								Debug.Console(1, this,
+								this.LogInformation(
 									"[DeserializeResponse] zEvent.calldisconnect ********************************************");
-								Debug.Console(1, this, "[DeserializeResponse] zEvent.calldisconnect - disconnectEvent.Successful: {0}",
+								this.LogInformation("[DeserializeResponse] zEvent.calldisconnect - disconnectEvent.Successful: {Successful}",
 									disconnectEvent.Successful);
 
 								if (disconnectEvent.Successful)
@@ -1653,8 +1653,8 @@ namespace PDT.Plugins.Zoom.Room
 
 										if (activeCall != null)
 										{
-											Debug.Console(1, this,
-												"[DeserializeResponse] zEvent.calldisconnect - ActiveCalls.Count: {0} activeCall.Id: {1}, activeCall.Number: {2} activeCall.Name: {3}, activeCall.IsActive: {4}",
+											this.LogInformation(
+												"[DeserializeResponse] zEvent.calldisconnect - ActiveCalls.Count: {ActiveCallsCount} activeCall.Id: {CallId}, activeCall.Number: {CallNumber} activeCall.Name: {CallName}, activeCall.IsActive: {IsActiveCall}",
 												ActiveCalls.Count, activeCall.Id, activeCall.Number, activeCall.Name, activeCall.IsActiveCall);
 											activeCall.Status = eCodecCallStatus.Disconnected;
 
@@ -1663,7 +1663,7 @@ namespace PDT.Plugins.Zoom.Room
 									}
 								}
 
-								Debug.Console(1, this,
+								this.LogInformation(
 									"[DeserializeResponse] zEvent.calldisconnect ********************************************");
 
 								UpdateCallStatus();
@@ -1707,7 +1707,7 @@ namespace PDT.Plugins.Zoom.Room
 							{
                                 Status.NeedWaitForHost = JsonConvert.DeserializeObject<zEvent.NeedWaitForHost>(responseObj.ToString());
 
-							    Debug.Console(1, this, "WaitingForHost: {0}", Status.NeedWaitForHost.Wait);
+							    this.LogInformation("WaitingForHost: {Wait}", Status.NeedWaitForHost.Wait);
 
                                 if (Status.NeedWaitForHost.Wait)
 							    {
@@ -1766,7 +1766,7 @@ namespace PDT.Plugins.Zoom.Room
 							{
 								var status = responseObj.ToObject<zEvent.PinStatusOfScreenNotification>();
 
-								Debug.Console(1, this, "Pin Status notification for UserId: {0}, ScreenIndex: {1}", status.PinnedUserId,
+								this.LogInformation("Pin Status notification for UserId: {PinnedUserId}, ScreenIndex: {ScreenIndex}", status.PinnedUserId,
 									status.ScreenIndex);
 
 								Participant alreadyPinnedParticipant = null;
@@ -1780,7 +1780,7 @@ namespace PDT.Plugins.Zoom.Room
 									// Make sure that the already pinned participant isn't the same ID as for this message.  If true, clear the pinned fb.
 									if (alreadyPinnedParticipant != null && alreadyPinnedParticipant.UserId != status.PinnedUserId)
 									{
-										Debug.Console(1, this, "Participant: {0} with id: {1} already pinned to screenIndex {2}.  Clearing pinned fb.",
+										this.LogInformation("Participant: {ParticipantName} with id: {UserId} already pinned to screenIndex {ScreenIndexIsPinnedToFb}.  Clearing pinned fb.",
 											alreadyPinnedParticipant.Name, alreadyPinnedParticipant.UserId,
 											alreadyPinnedParticipant.ScreenIndexIsPinnedToFb);
 										alreadyPinnedParticipant.IsPinnedFb = false;
@@ -1802,13 +1802,13 @@ namespace PDT.Plugins.Zoom.Room
 
 									if (participant == null && alreadyPinnedParticipant == null)
 									{
-										Debug.Console(1, this, "no matching participant found by pinned_user_id: {0} or screen_index: {1}",
+										this.LogInformation("no matching participant found by pinned_user_id: {PinnedUserId} or screen_index: {ScreenIndex}",
 											status.PinnedUserId, status.ScreenIndex);
 										return;
 									}
 									else if (participant != null)
 									{
-										Debug.Console(2, this, "Unpinning {0} with id: {1} from screen index: {2}", participant.Name,
+										this.LogDebug("Unpinning {ParticipantName} with id: {UserId} from screen index: {ScreenIndex}", participant.Name,
 											participant.UserId, status.ScreenIndex);
 										participant.IsPinnedFb = false;
 										participant.ScreenIndexIsPinnedToFb = -1;
@@ -1864,13 +1864,13 @@ namespace PDT.Plugins.Zoom.Room
 							{
 								JsonConvert.PopulateObject(responseObj.ToString(), Status.Call);
 
-								Debug.Console(1, this,
-									"[DeserializeResponse] zStatus.call - Status.Call.Info.meeting_id: {0} Status.Call.Info.meeting_list_item.meetingName: {1}",
+								this.LogInformation(
+									"[DeserializeResponse] zStatus.call - Status.Call.Info.meeting_id: {MeetingId} Status.Call.Info.meeting_list_item.meetingName: {MeetingName}",
 									Status.Call.Info.meeting_id, Status.Call.Info.meeting_list_item.meetingName);
 								foreach (var participant in Status.Call.Participants)
 								{
-									Debug.Console(1, this,
-										"[DeserializeResponse] zStatus.call - Status.Call.Participants participant.UserId: {0} participant.UserName: {1}",
+									this.LogInformation(
+										"[DeserializeResponse] zStatus.call - Status.Call.Participants participant.UserId: {UserId} participant.UserName: {UserName}",
 										participant.UserId, participant.UserName);
 								}
 
@@ -1942,20 +1942,20 @@ namespace PDT.Plugins.Zoom.Room
 					}
 					default:
 					{
-						Debug.Console(1, "Unknown Response Type:");
+						Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Unknown Response Type:");
 						break;
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				Debug.Console(1, this, "Error Deserializing feedback: {0}", ex.Message);
-			    Debug.Console(2, this, "{0}", ex);
+				this.LogInformation("Error Deserializing feedback: {Message}", ex.Message);
+			    this.LogDebug("{Exception}", ex);
 
 			    if (ex.InnerException != null)
 			    {
-			        Debug.Console(1, this,"Error Deserializing feedback inner exception: {0}", ex.InnerException.Message);
-                    Debug.Console(2, this, "{0}", ex.InnerException.StackTrace);
+			        this.LogInformation("Error Deserializing feedback inner exception: {InnerMessage}", ex.InnerException.Message);
+                    this.LogDebug("{StackTrace}", ex.InnerException.StackTrace);
 			    }
 			}
 		}
@@ -1979,7 +1979,7 @@ namespace PDT.Plugins.Zoom.Room
                         _props.DefaultCallLayout));
                 }
                 else
-                    Debug.Console(0, this, "Unable to set default Layout.  {0} not currently an available layout based on meeting state", _props.DefaultCallLayout);
+                    this.LogError("Unable to set default Layout.  {DefaultCallLayout} not currently an available layout based on meeting state", _props.DefaultCallLayout);
 			}
 		}
 
@@ -1998,13 +1998,13 @@ namespace PDT.Plugins.Zoom.Room
 		{
 			if (Debug.Level <= 0) return;
 
-			Debug.Console(1, this, "*************************** Call Participants **************************");
+			this.LogInformation("*************************** Call Participants **************************");
 			foreach (var participant in Participants.CurrentParticipants)
 			{
-				Debug.Console(1, this, "UserId: {3} Name: {0} Audio: {1} IsHost: {2}",
-					participant.Name, participant.AudioMuteFb, participant.IsHost, participant.UserId);
+				this.LogInformation("UserId: {UserId} Name: {Name} Audio: {Audio} IsHost: {IsHost}",
+					participant.UserId, participant.Name, participant.AudioMuteFb, participant.IsHost);
 			}
-			Debug.Console(1, this, "************************************************************************");
+			this.LogInformation("************************************************************************");
 		}
 
 		/// <summary>
@@ -2023,8 +2023,8 @@ namespace PDT.Plugins.Zoom.Room
 		/// </summary>
 		private void UpdateCallStatus()
 		{
-		    Debug.Console(1, this,
-		        "[UpdateCallStatus] Current Call Status: {0} Active Call Count: {1} Need Wait For Host: {2}",
+		    this.LogInformation(
+		        "[UpdateCallStatus] Current Call Status: {Status} Active Call Count: {ActiveCallCount} Need Wait For Host: {NeedWaitForHost}",
 		        Status.Call != null ? Status.Call.Status.ToString() : "no call", ActiveCalls.Count, Status.NeedWaitForHost.Wait);
 
 			if (Status.Call != null)
@@ -2120,38 +2120,38 @@ namespace PDT.Plugins.Zoom.Room
 							break;
 					}
 
-					Debug.Console(1, this, "[UpdateCallStatus] ELSE ActiveCalls.Count == {1} - Current Call Status: {0}",
-						Status.Call != null ? Status.Call.Status.ToString() : "no call", ActiveCalls.Count);
+					this.LogInformation("[UpdateCallStatus] ELSE ActiveCalls.Count == {ActiveCallCount} - Current Call Status: {Status}",
+						ActiveCalls.Count, Status.Call != null ? Status.Call.Status.ToString() : "no call");
 				    
 
 					OnCallStatusChange(existingCall);
 				}
 			}
 
-			Debug.Console(1, this, "[UpdateCallStatus] Active Calls ------------------------------");
+			this.LogInformation("[UpdateCallStatus] Active Calls ------------------------------");
 
 			// Clean up any disconnected calls left in the list
 			for (int i = 0; i < ActiveCalls.Count; i++)
 			{
 				var call = ActiveCalls[i];
 
-				Debug.Console(1, this,
-					@"ID: {1}
-					Number: {5}
-					Name: {0}                    
-                    IsActive: {2}
-                    Status: {3}
-                    Direction: {4}
-					IsActiveCall: {6}", call.Name, call.Id, call.IsActiveCall, call.Status, call.Direction, call.Number,
+				this.LogInformation(
+					@"ID: {CallId}
+					Number: {CallNumber}
+					Name: {CallName}                    
+                    IsActive: {IsActive}
+                    Status: {CallStatus}
+                    Direction: {Direction}
+					IsActiveCall: {IsActiveCall}", call.Id, call.Number, call.Name, call.IsActiveCall, call.Status, call.Direction,
 					call.IsActiveCall);
 
 				if (!call.IsActiveCall)
 				{
-					Debug.Console(1, this, "[UpdateCallStatus] Removing Inactive call.Id: {1} call.Name: {0}", call.Name, call.Id);
+					this.LogInformation("[UpdateCallStatus] Removing Inactive call.Id: {CallId} call.Name: {CallName}", call.Id, call.Name);
 					ActiveCalls.Remove(call);
 				}
 			}
-			Debug.Console(1, this, "[UpdateCallStatus] Active Calls ------------------------------");
+			this.LogInformation("[UpdateCallStatus] Active Calls ------------------------------");
 
 			//clear participants list after call cleanup
 			var emptyList = new List<Participant>();
@@ -2204,7 +2204,7 @@ namespace PDT.Plugins.Zoom.Room
 			_meetingPasswordRequired = false;
             base.OnCallStatusChange(item);
 
-			Debug.Console(1, this, "[OnCallStatusChange] Current Call Status: {0}",
+			this.LogInformation("[OnCallStatusChange] Current Call Status: {Status}",
 				Status.Call != null ? Status.Call.Status.ToString() : "no call");
 		}
 
@@ -2235,15 +2235,15 @@ namespace PDT.Plugins.Zoom.Room
             }
             catch (Exception e)
             {
-                Debug.Console(1, this, "Exception getting sharing status: {0}", e.Message);
-                Debug.Console(2, this, "{0}", e.StackTrace);
+                this.LogInformation("Exception getting sharing status: {Message}", e.Message);
+                this.LogDebug("{StackTrace}", e.StackTrace);
                 return sharingState;
             }
         }
 
         private void UpdateDirectory()
         {
-            Debug.Console(2, this, "Updating directory");
+            this.LogDebug("Updating directory");
             var directoryResults = zStatus.Phonebook.ConvertZoomContactsToGeneric(Status.Phonebook.Contacts);
 
             if (!PhonebookSyncState.InitialSyncComplete)
@@ -2269,7 +2269,7 @@ namespace PDT.Plugins.Zoom.Room
 
         private void ClearContactDebounceTimer()
         {
-            Debug.Console(2, this, "Clearing Timer");
+            this.LogDebug("Clearing Timer");
             if (!contactsDebounceTimer.Disposed && contactsDebounceTimer != null)
             {
                 contactsDebounceTimer.Dispose();
@@ -2287,7 +2287,7 @@ namespace PDT.Plugins.Zoom.Room
             {
                 if (Participants.CurrentParticipants.Count == 0)
                 {
-                    Debug.Console(2, this, "No current participants");
+                    this.LogDebug("No current participants");
                     return false;
                 }
 
@@ -2295,16 +2295,16 @@ namespace PDT.Plugins.Zoom.Room
 
                 if(host == null)
                 {
-                    Debug.Console(2, this, "Host is currently null");
+                    this.LogDebug("Host is currently null");
                     return false;
                 }
-                Debug.Console(2, this, "Host is: '{0}' IsMyself?: {1}", host.Name, host.IsMyself);
+                this.LogDebug("Host is: '{HostName}' IsMyself?: {IsMyself}", host.Name, host.IsMyself);
                 return host.IsMyself;
             }
             catch (Exception e)
             {
-                Debug.Console(1, "Exception getting isHost: {0}", e.Message);
-                Debug.Console(2, "{0}", e.StackTrace);
+                Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Exception getting isHost: {Message}", e.Message);
+                Debug.LogMessage(Serilog.Events.LogEventLevel.Debug, "{StackTrace}", e.StackTrace);
                 return false;
             }
         }
@@ -2356,7 +2356,7 @@ namespace PDT.Plugins.Zoom.Room
 
 		public override void MuteOff()
 		{
-			Debug.Console(2, this, "Unmuting to previous level: {0}", _previousVolumeLevel);
+			this.LogDebug("Unmuting to previous level: {PreviousVolumeLevel}", _previousVolumeLevel);
 			SetVolume((ushort) _previousVolumeLevel);
 		}
 
@@ -2537,7 +2537,7 @@ namespace PDT.Plugins.Zoom.Room
 					}
 					catch (Exception e)
 					{
-						Debug.Console(1, this, "Unable to parse '{0}' to zConfiguration.eLayoutStyle: {1}", s, e);
+						this.LogInformation("Unable to parse '{LayoutStyleString}' to zConfiguration.eLayoutStyle: {Exception}", s, e);
 					}
 				});
 
@@ -2567,7 +2567,7 @@ namespace PDT.Plugins.Zoom.Room
 					}
 					catch (Exception e)
 					{
-						Debug.Console(1, this, "Unable to parse '{0}' to zConfiguration.eLayoutSize: {1}", s, e);
+						this.LogInformation("Unable to parse '{LayoutSizeString}' to zConfiguration.eLayoutSize: {Exception}", s, e);
 					}
 				});
 
@@ -2608,7 +2608,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			PasswordRequired += (devices, args) =>
 			{
-                Debug.Console(2, this, "***********************************PaswordRequired. Message: {0} Cancelled: {1} Last Incorrect: {2} Failed: {3}", args.Message, args.LoginAttemptCancelled, args.LastAttemptWasIncorrect, args.LoginAttemptFailed);
+                this.LogDebug("***********************************PaswordRequired. Message: {Message} Cancelled: {Cancelled} Last Incorrect: {LastIncorrect} Failed: {Failed}", args.Message, args.LoginAttemptCancelled, args.LastAttemptWasIncorrect, args.LoginAttemptFailed);
 
 				if (args.LoginAttemptCancelled)
 				{
@@ -2733,14 +2733,14 @@ namespace PDT.Plugins.Zoom.Room
 
 		public override void Dial(Meeting meeting)
 		{
-			Debug.Console(1, this, "Dialing meeting.Id: {0} Title: {1}", meeting.Id, meeting.Title);
+			this.LogInformation("Dialing meeting.Id: {MeetingId} Title: {MeetingTitle}", meeting.Id, meeting.Title);
 		    _lastDialedMeetingNumber = meeting.Id;
 			SendText(string.Format("zCommand Dial Start meetingNumber: {0}", meeting.Id));
 		}
 
 		public override void Dial(string number)
 		{
-		    Debug.Console(2, this, "Dialing number: {0}", number);
+		    this.LogDebug("Dialing number: {Number}", number);
             _lastDialedMeetingNumber = number;
 			SendText(string.Format("zCommand Dial Join meetingNumber: {0}", number));
 		}
@@ -2752,7 +2752,7 @@ namespace PDT.Plugins.Zoom.Room
         /// <param name="password"></param>
         public void Dial(string number, string password)
         {
-            Debug.Console(2, this, "Dialing meeting number: {0} with password: {1}", number, password);
+            this.LogDebug("Dialing meeting number: {Number} with password: {Password}", number, password);
             SendText(string.Format("zCommand Dial Join meetingNumber: {0} password: {1}", number, password));
         }
 
@@ -2767,7 +2767,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			if (ic != null)
 			{
-				Debug.Console(1, this, "Attempting to Dial (Invite): {0}", ic.Name);
+				this.LogInformation("Attempting to Dial (Invite): {ContactName}", ic.Name);
 
 				if (!IsInCall)
 				{
@@ -2883,7 +2883,7 @@ namespace PDT.Plugins.Zoom.Room
 		{
 			try
 			{
-				Debug.Console(2, this, "OnDirectoryResultReturned.  Result has {0} contacts", result.Contacts.Count);
+				this.LogDebug("OnDirectoryResultReturned.  Result has {ContactCount} contacts", result.Contacts.Count);
 
 				CurrentDirectoryResultIsNotDirectoryRoot.FireUpdate();
 
@@ -2905,7 +2905,7 @@ namespace PDT.Plugins.Zoom.Room
                 //    directoryResult = result;
                 //}
 
-				Debug.Console(2, this, "Updating directoryResult. IsOnRoot: {0} Contact Count: {1}",
+				this.LogDebug("Updating directoryResult. IsOnRoot: {DirectoryIsRoot} Contact Count: {ContactCount}",
 					directoryIsRoot, directoryResult.Contacts.Count);
 
 				// This will return the latest results to all UIs.  Multiple indendent UI Directory browsing will require a different methodology
@@ -2923,7 +2923,7 @@ namespace PDT.Plugins.Zoom.Room
 			}
 			catch (Exception e)
 			{
-				Debug.Console(2, this, "Error: {0}", e);
+				this.LogDebug("Error: {Exception}", e);
 			}
 
 			//PrintDirectory(result);
@@ -3025,7 +3025,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			if (user == null)
 			{
-				Debug.Console(2, this, "Unable to find user with id: {0}", userId);
+				this.LogDebug("Unable to find user with id: {UserId}", userId);
 				return;
 			}
 
@@ -3059,7 +3059,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			if (user == null)
 			{
-				Debug.Console(2, this, "Unable to find user with id: {0}", userId);
+				this.LogDebug("Unable to find user with id: {UserId}", userId);
 				return;
 			}
 
@@ -3102,7 +3102,7 @@ namespace PDT.Plugins.Zoom.Room
 
 			if (user == null)
 			{
-				Debug.Console(2, this, "Unable to find user with id: {0}", userId);
+				this.LogDebug("Unable to find user with id: {UserId}", userId);
 				return;
 			}
 
@@ -3346,7 +3346,7 @@ namespace PDT.Plugins.Zoom.Room
 		/// </summary>
 		private void ComputeAvailableLayouts()
 		{
-			Debug.Console(1, this, "Computing available layouts...");
+			this.LogInformation("Computing available layouts...");
 			zConfiguration.eLayoutStyle availableLayouts = zConfiguration.eLayoutStyle.None;
 			if (Status.Layout.can_Switch_Wall_View)
 			{
@@ -3370,7 +3370,7 @@ namespace PDT.Plugins.Zoom.Room
 				availableLayouts |= zConfiguration.eLayoutStyle.Strip;
 			}
 
-			Debug.Console(1, this, "availablelayouts: {0}", availableLayouts);
+			this.LogInformation("availablelayouts: {AvailableLayouts}", availableLayouts);
 
 			AvailableLayouts = availableLayouts;
 		}
@@ -3517,7 +3517,7 @@ namespace PDT.Plugins.Zoom.Room
         public void SubmitPassword(string password)
         {
             _meetingPasswordRequired = false;
-            Debug.Console(2, this, "Password Submitted: {0}", password);
+            this.LogDebug("Password Submitted: {Password}", password);
             Dial(_lastDialedMeetingNumber, password);
         }
 
@@ -3528,7 +3528,7 @@ namespace PDT.Plugins.Zoom.Room
             var handler = PasswordRequired;
             if (handler != null)
             {	            
-				Debug.Console(2, this, "Meeting Password Required: {0}", _meetingPasswordRequired);
+				this.LogDebug("Meeting Password Required: {MeetingPasswordRequired}", _meetingPasswordRequired);
 
 	            handler(this, new PasswordPromptEventArgs(lastAttemptIncorrect, loginFailed, loginCancelled, message));
             }
@@ -3586,7 +3586,7 @@ namespace PDT.Plugins.Zoom.Room
 
 	    public void StartNormalMeetingFromSharingOnlyMeeting()
 	    {
-            Debug.Console(2, this, "Converting Sharing Meeting to Normal Meeting");
+            this.LogDebug("Converting Sharing Meeting to Normal Meeting");
 	        SendText("zCommand call sharing ToNormal");
 	    }
 
@@ -3673,12 +3673,12 @@ namespace PDT.Plugins.Zoom.Room
 
         void OnShareInfoChanged(zStatus.Sharing status)
         {
-            Debug.Console(2, this,
+            this.LogDebug(
 @"ShareInfoChanged:
-isSharingHDMI: {0}
-isSharingAirplay: {1}
-AirplayPassword: {2}
-OSD Display State: {3}
+isSharingHDMI: {IsSharingHDMI}
+isSharingAirplay: {IsSharingAirplay}
+AirplayPassword: {AirplayPassword}
+OSD Display State: {DispState}
 ",
 status.isSharingBlackMagic,
 status.isAirHostClientConnected,

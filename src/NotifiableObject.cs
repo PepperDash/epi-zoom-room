@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using PepperDash.Core;
+using Serilog.Events;
 
 namespace PDT.Plugins.Zoom.Room
 {
@@ -18,7 +19,7 @@ namespace PDT.Plugins.Zoom.Room
             }
             else
             {
-                Debug.Console(2, "PropertyChanged event is NULL");
+                Debug.LogMessage(LogEventLevel.Debug, "PropertyChanged event is NULL");
             }
 		}
 

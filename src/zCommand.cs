@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using PepperDash.Core;
 using PepperDash.Essentials.Devices.Common.Codec;
 using PepperDash.Essentials.Devices.Common.VideoCodec.Interfaces;
+using Serilog.Events;
 
 namespace PDT.Plugins.Zoom.Room
 {
@@ -72,7 +73,7 @@ namespace PDT.Plugins.Zoom.Room
 
             if (Debug.Level > 0)
             {
-                Debug.Console(1, "Meetings List:\n");
+                Debug.LogMessage(LogEventLevel.Information, "Meetings List:\n");
             }
 
             foreach (var b in bookings)
@@ -100,7 +101,7 @@ namespace PDT.Plugins.Zoom.Room
                 var now = DateTime.Now;
                 if (meeting.StartTime < now && meeting.EndTime < now)
                 {
-                    Debug.Console(1, "Skipping meeting {0}. Meeting is in the past.", meeting.Title);
+                    Debug.LogMessage(LogEventLevel.Information, "Skipping meeting {MeetingTitle}. Meeting is in the past.", meeting.Title);
                     continue;
                 }
 
@@ -108,9 +109,9 @@ namespace PDT.Plugins.Zoom.Room
 
                 if (Debug.Level > 0)
                 {
-                    Debug.Console(1, "Title: {0}, ID: {1}, Organizer: {2}", meeting.Title, meeting.Id, meeting.Organizer);
-                    Debug.Console(1, "    Start Time: {0}, End Time: {1}, Duration: {2}", meeting.StartTime, meeting.EndTime, meeting.Duration);
-                    Debug.Console(1, "    Joinable: {0}\n", meeting.Joinable);
+                    Debug.LogMessage(LogEventLevel.Information, "Title: {MeetingTitle}, ID: {MeetingId}, Organizer: {Organizer}", meeting.Title, meeting.Id, meeting.Organizer);
+                    Debug.LogMessage(LogEventLevel.Information, "    Start Time: {StartTime}, End Time: {EndTime}, Duration: {Duration}", meeting.StartTime, meeting.EndTime, meeting.Duration);
+                    Debug.LogMessage(LogEventLevel.Information, "    Joinable: {Joinable}\n", meeting.Joinable);
                 }
             }
 

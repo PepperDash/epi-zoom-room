@@ -7,7 +7,7 @@ using PepperDash.Essentials.Devices.Common.Cameras;
 
 namespace PDT.Plugins.Zoom.Room
 {
-    public class ZoomRoomCamera : CameraBase, IHasCameraPtzControl, IBridgeAdvanced
+    public class ZoomRoomCamera : CameraBase, IHasCameraPtzControl, IHasCameraControls, IBridgeAdvanced
     {
         protected ZoomRoom ParentCodec { get; private set; }
 

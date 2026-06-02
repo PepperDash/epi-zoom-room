@@ -1,6 +1,7 @@
 using System;
 using Crestron.SimplSharp;
 using PepperDash.Core;
+using PepperDash.Core.Logging;
 
 namespace PDT.Plugins.Zoom.Room
 {
@@ -83,14 +84,14 @@ namespace PDT.Plugins.Zoom.Room
         public void LoginResponseReceived()
         {
             LoginResponseWasReceived = true;
-            Debug.Console(1, this, "Login Rsponse Received.");
+            this.LogInformation("Login Rsponse Received.");
             CheckSyncStatus();
         }
 
         public void ReceivedFirstJsonResponse()
         {
             FirstJsonResponseWasReceived = true;
-            Debug.Console(1, this, "First JSON Response Received.");
+            this.LogInformation("First JSON Response Received.");
 
             var handler = FirstJsonResponseReceived;
             if (handler != null)
@@ -103,21 +104,21 @@ namespace PDT.Plugins.Zoom.Room
         public void InitialQueryMessagesSent()
         {
             InitialQueryMessagesWereSent = true;
-            Debug.Console(1, this, "Query Messages Sent.");
+            this.LogInformation("Query Messages Sent.");
             CheckSyncStatus();
         }
 
         public void LastQueryResponseReceived()
         {
             LastQueryResponseWasReceived = true;
-            Debug.Console(1, this, "Last Query Response Received.");
+            this.LogInformation("Last Query Response Received.");
             CheckSyncStatus();
         }
 
         public void CamerasSetUp()
         {
             CamerasHaveBeenSetUp = true;
-            Debug.Console(1, this, "Cameras Set Up.");
+            this.LogInformation("Cameras Set Up.");
             CheckSyncStatus();
         }
 
@@ -138,7 +139,7 @@ namespace PDT.Plugins.Zoom.Room
                 CamerasHaveBeenSetUp)
             {
                 InitialSyncComplete = true;
-                Debug.Console(1, this, "Initial Codec Sync Complete!");
+                this.LogInformation("Initial Codec Sync Complete!");
             }
             else
             {

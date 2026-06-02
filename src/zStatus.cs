@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using PepperDash.Core;
 using PepperDash.Essentials.Devices.Common.Codec;
+using Serilog.Events;
 
 namespace PDT.Plugins.Zoom.Room
 {
@@ -197,7 +198,7 @@ namespace PDT.Plugins.Zoom.Room
                 }
                 catch (Exception e)
                 {
-                    Debug.Console(1, "Error converting Zoom Phonebook results to generic: {0}", e);
+                    Debug.LogMessage(LogEventLevel.Information, "Error converting Zoom Phonebook results to generic: {Exception}", e);
                 }
 
                 return directory;
@@ -753,7 +754,7 @@ namespace PDT.Plugins.Zoom.Room
 
             public CallRecordInfo()
             {
-                Debug.Console(2, Debug.ErrorLogLevel.Notice, "********************************************* CallRecordInfo() ******************************************");
+                Debug.LogMessage(LogEventLevel.Debug, "********************************************* CallRecordInfo() ******************************************");
             }
         }
     }
