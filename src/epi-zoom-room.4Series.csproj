@@ -23,10 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Essentials\src\PepperDash.Core\PepperDash.Core.csproj" />
-    <ProjectReference Include="..\..\Essentials\src\PepperDash.Essentials.Core\PepperDash.Essentials.Core.csproj" />
-    <ProjectReference Include="..\..\Essentials\src\PepperDash.Essentials.Devices.Common\PepperDash.Essentials.Devices.Common.csproj" />
-    <ProjectReference Include="..\..\Essentials\src\PepperDash.Essentials.MobileControl.Messengers\PepperDash.Essentials.MobileControl.Messengers.csproj" />
+    <PackageReference Include="PepperDashCore" Version="3.0.0-dev-v3-routing.3" />
+    <PackageReference Include="PepperDash.Essentials.Core" Version="3.0.0-dev-v3-routing.3" />
+    <PackageReference Include="PepperDash.Essentials.Devices.Common" Version="3.0.0-dev-v3-routing.3" />
+    <PackageReference Include="PepperDash.Essentials.MobileControl.Messengers" Version="3.0.0-dev-v3-routing.3" />
   </ItemGroup>
 
 </Project>
