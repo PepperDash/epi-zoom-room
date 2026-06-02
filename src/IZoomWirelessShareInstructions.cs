@@ -1,6 +1,6 @@
 using System;
 
-namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
+namespace PepperDash.Essentials.Plugins
 {
     public interface IZoomWirelessShareInstructions
     {

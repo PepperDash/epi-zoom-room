@@ -1,6 +1,6 @@
 using PepperDash.Essentials.Devices.Common.Cameras;
 
-namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
+namespace PepperDash.Essentials.Plugins
 {
     public class ZoomRoomFarEndCamera : ZoomRoomCamera, IAmFarEndCamera
     {

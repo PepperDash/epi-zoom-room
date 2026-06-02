@@ -3,7 +3,7 @@ using Crestron.SimplSharp;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
 
-namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Tracks the initial sycnronization state when establishing a new connection

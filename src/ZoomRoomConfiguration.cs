@@ -1,4 +1,4 @@
-namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Used to track the current configuration of a ZoomRoom

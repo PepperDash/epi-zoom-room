@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 using PepperDash.Core;
 using Serilog.Events;
 
-namespace PepperDash.Essentials.Plugins.Zoom.ZoomRoom
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// zConfiguration class structure
