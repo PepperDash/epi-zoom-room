@@ -5,7 +5,7 @@ using PepperDash.Core;
 using PepperDash.Essentials.Devices.Common.Codec;
 using Serilog.Events;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
     /// <summary>
     /// zStatus class stucture

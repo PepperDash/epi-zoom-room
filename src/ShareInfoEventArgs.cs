@@ -1,6 +1,6 @@
 using System;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
     public class ShareInfoEventArgs : EventArgs
     {

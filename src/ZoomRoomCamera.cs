@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Newtonsoft.Json;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Devices.Common.Cameras;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
     public class ZoomRoomCamera : CameraBase, IHasCameraPtzControl, IHasCameraControls, IBridgeAdvanced
     {

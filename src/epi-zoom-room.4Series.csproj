@@ -3,8 +3,8 @@
   <PropertyGroup>
     <ProjectType>ProgramLibrary</ProjectType>
     <TargetFramework>net8</TargetFramework>
-    <RootNamespace>PDT.Plugins.Zoom.Room</RootNamespace>
-    <AssemblyName>PDT.Plugins.Zoom.Room</AssemblyName>
+    <RootNamespace>PepperDash.Essentials.Plugins.Zoom.Room</RootNamespace>
+    <AssemblyName>PepperDash.Essentials.Plugins.Zoom.Room</AssemblyName>
     <Configurations>Debug;Release</Configurations>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>

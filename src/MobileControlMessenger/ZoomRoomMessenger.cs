@@ -9,7 +9,7 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Devices.Common.Codec;
 using PepperDash.Essentials.Devices.Common.VideoCodec.Interfaces;
-using PDT.Plugins.Zoom.Room;
+using PepperDash.Essentials.Plugins.Zoom.Room;
 
 namespace PepperDash.Essentials.AppServer.Messengers
 {

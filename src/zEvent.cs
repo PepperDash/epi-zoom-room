@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Devices.Common.VideoCodec;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
     /// <summary>
     /// Defines the requirements for Zoom Room layout control

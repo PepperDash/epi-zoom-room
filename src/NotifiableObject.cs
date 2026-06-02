@@ -1,8 +1,8 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using PepperDash.Core;
 using Serilog.Events;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
     public abstract class NotifiableObject : INotifyPropertyChanged
 	{

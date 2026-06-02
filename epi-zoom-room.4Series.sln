@@ -2,7 +2,7 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PDT.Plugins.Zoom.Room", "src\PDT.Plugins.Zoom.Room.csproj", "{647D21FB-E898-4818-B097-760C424D7C57}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "epi-zoom-room.4Series", "src\epi-zoom-room.4Series.csproj", "{647D21FB-E898-4818-B097-760C424D7C57}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

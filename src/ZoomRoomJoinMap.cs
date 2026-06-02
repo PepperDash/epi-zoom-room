@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges.JoinMaps;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
 	public class ZoomRoomJoinMap : VideoCodecControllerJoinMap
 	{

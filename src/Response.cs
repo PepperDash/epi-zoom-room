@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins.Zoom.Room
 {
     /// <summary>
     /// Represents a response from a ZoomRoom system
