@@ -31,7 +31,9 @@ namespace PepperDash.Essentials.Plugins
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
         IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions
 	{
+#pragma warning disable CS0067 // Required by IHasCameraMuteWithUnmuteReqeust; never raised because Zoom Room SDK handles video state directly
         public event EventHandler VideoUnmuteRequested;
+#pragma warning restore CS0067
 
 		private const long MeetingRefreshTimer = 60000;
         public uint DefaultMeetingDurationMin { get; private set; }
@@ -43,6 +45,9 @@ namespace PepperDash.Essentials.Plugins
         private bool _sdkIsRecording;
         private bool _sdkMeetingLocked;
         private bool _sdkIsHost;
+        // SDK gap: ZrcSdk does not surface a host-name event; _sdkHostName stays empty.
+        // If the SDK adds a HostChanged payload in a future version, populate it there.
+        private string _sdkHostName = string.Empty;
         private int  _sdkSharingState; // 0 = not sharing
         private string _currentMeetingId     = string.Empty;
         private string _currentMeetingNumber = string.Empty;
@@ -443,258 +448,10 @@ namespace PepperDash.Essentials.Plugins
 		/// </summary>
 		private void SetUpFeedbackActions()
 		{
-            // Set these up initially.
+            // All feedbacks are now driven by SDK events (see OnController* handlers).
+            // The legacy Configuration.*/Status.* PropertyChanged subscriptions have been removed
+            // because those models are no longer fed now that the JSON-over-SSH pipeline is gone.
             SetUpCallFeedbackActions();
-
-			Configuration.Audio.Output.PropertyChanged += (o, a) =>
-			{
-				if (a.PropertyName == "Volume")
-				{
-					VolumeLevelFeedback.FireUpdate();
-					MuteFeedback.FireUpdate();
-				}
-			};
-
-			Configuration.Call.Microphone.PropertyChanged += (o, a) =>
-			{
-				if (a.PropertyName == "Mute")
-				{
-					PrivacyModeIsOnFeedback.FireUpdate();
-				}
-			};
-
-			Configuration.Video.PropertyChanged += (o, a) =>
-			{
-				if (a.PropertyName == "HideConfSelfVideo")
-				{
-					SelfviewIsOnFeedback.FireUpdate();
-				}
-			};
-			Configuration.Video.Camera.PropertyChanged += (o, a) =>
-			{
-				if (a.PropertyName == "SelectedId")
-				{
-                    if (Cameras == null)
-                    {
-                        return;
-                    }
-
-                    var camera = Cameras.FirstOrDefault(c => c.Key.IndexOf(Configuration.Video.Camera.SelectedId, StringComparison.OrdinalIgnoreCase) > -1);
-                    if (camera != null)
-                    {
-                        this.LogInformation("Camera selected with key: '{CameraKey}'", camera.Key);
-
-                        SelectedCamera = camera;
-
-                        if (CameraIsMutedFeedback.BoolValue)
-                        {
-                            CameraMuteOff();
-                        }
-                    }
-                    else
-                    {
-                        this.LogInformation("No camera found with key: '{SelectedId}'", Configuration.Video.Camera.SelectedId);
-                    }
-				}
-			};
-
-			Configuration.Call.Camera.PropertyChanged += (o, a) =>
-			{
-				this.LogInformation("Configuration.Call.Camera.PropertyChanged: {PropertyName}", a.PropertyName);
-
-				if (a.PropertyName != "Mute") return;
-
-				CameraIsOffFeedback.FireUpdate();
-				CameraAutoModeIsOnFeedback.FireUpdate();
-			};
-
-			Configuration.Call.Layout.PropertyChanged += (o, a) =>
-			{
-				switch (a.PropertyName)
-				{
-					case "Position":
-					{
-						ComputeSelfviewPipPositionStatus();
-
-						SelfviewPipPositionFeedback.FireUpdate();
-
-						break;
-					}
-					case "ShareThumb":
-					{
-						ContentSwappedWithThumbnailFeedback.FireUpdate();
-                        OnLayoutInfoChanged();
-						break;
-					}
-					case "Style":
-					{
-						LocalLayoutFeedback.FireUpdate();
-                        OnLayoutInfoChanged();
-						break;
-					}
-					case "Size":
-					{
-						// TODO: #714 [ ] SetupFeedbackActions >> Size
-						ComputeSelfviewPipSizeStatus();
-
-						SelfviewPipSizeFeedback.FireUpdate();
-
-						break;
-					}
-				}
-			};
-
-            Configuration.Call.Lock.PropertyChanged += (o, a) =>
-                {
-                    if (a.PropertyName == "Enable")
-                    {
-                        MeetingIsLockedFeedback.FireUpdate();
-                        MeetingInfo = new MeetingInfo
-                            (
-                                MeetingInfo.Id, 
-                                MeetingInfo.Name, 
-                                MeetingInfo.Host,
-                                MeetingInfo.Password,
-                                "None", 
-                                MeetingInfo.IsHost, 
-                                MeetingInfo.IsSharingMeeting, 
-                                MeetingInfo.WaitingForHost, 
-                                MeetingIsLockedFeedback.BoolValue,
-                                MeetingIsRecordingFeedback.BoolValue, false
-                            );
-                    }
-                };
-
-			// This is to deal with incorrect object structure coming back from the Zoom Room on v 5.6.3
-			Configuration.Client.Call.Layout.PropertyChanged += (o, a) =>
-			{
-				switch (a.PropertyName)
-				{
-					case "Position":
-					{
-						ComputeSelfviewPipPositionStatus();
-
-						SelfviewPipPositionFeedback.FireUpdate();
-
-						break;
-					}
-					case "ShareThumb":
-					{
-						ContentSwappedWithThumbnailFeedback.FireUpdate();
-                        OnLayoutInfoChanged();
-						break;
-					}
-					case "Style":
-					{
-						LocalLayoutFeedback.FireUpdate();
-                        OnLayoutInfoChanged();
-						break;
-					}
-				}
-			};
-
-
-			Status.Sharing.PropertyChanged += (o, a) =>
-			{
-                OnShareInfoChanged(Status.Sharing);
-                SharingSourceFeedback.FireUpdate();
-				switch (a.PropertyName)
-				{
-					case "password":
-						break;
-                    case "isSharingBlackMagic":
-                        {
-                            this.LogDebug("Updating sharing status: {PropertyName}", a.PropertyName);
-
-                            SharingContentIsOnFeedback.FireUpdate();
-                            if (MeetingInfo == null)
-                            {
-                                //Ignoring for now, as the CallInfo return will create the appropriate value
-                                return;
-                            }
-                            // Update the share status of the meeting info
-                            var meetingInfo = new MeetingInfo(MeetingInfo.Id, 
-                                MeetingInfo.Name, 
-                                MeetingInfo.Host, 
-                                MeetingInfo.Password, 
-                                "None", 
-                                _sdkIsHost, 
-                                MeetingInfo.IsSharingMeeting, 
-                                MeetingInfo.WaitingForHost, 
-                                MeetingIsLockedFeedback.BoolValue,
-                                MeetingIsRecordingFeedback.BoolValue, false);
-                            MeetingInfo = meetingInfo;
-                            break;
-                        }
-				}
-			};
-
-			Status.PhoneCall.PropertyChanged += (o, a) =>
-			{
-				switch (a.PropertyName)
-				{
-					case "IsIncomingCall":
-						this.LogInformation("Incoming Phone Call: {IsIncomingCall}", Status.PhoneCall.IsIncomingCall);
-						break;
-					case "PeerDisplayName":
-						this.LogInformation("Peer Display Name: {PeerDisplayName}", Status.PhoneCall.PeerDisplayName);
-						CallerIdNameFeedback.FireUpdate();
-						break;
-					case "PeerNumber":
-						this.LogInformation("Peer Number: {PeerNumber}", Status.PhoneCall.PeerNumber);
-						CallerIdNumberFeedback.FireUpdate();
-						break;
-					case "OffHook":
-						this.LogInformation("Phone is OffHook: {OffHook}", Status.PhoneCall.OffHook);
-						PhoneOffHookFeedback.FireUpdate();
-						break;
-				}
-			};
-
-			Status.Layout.PropertyChanged += (o, a) =>
-			{
-				this.LogInformation("Status.Layout.PropertyChanged a.PropertyName: {PropertyName}", a.PropertyName);
-				switch (a.PropertyName.ToLower())
-				{
-					case "can_Switch_speaker_view":
-					case "can_switch_wall_view":
-                    case "can_switch_strip_view":
-                    case "video_type":
-					case "can_switch_share_on_all_screens":
-					{
-						ComputeAvailableLayouts();
-						break;
-					}
-					case "is_in_first_page":
-					{
-						LayoutViewIsOnFirstPageFeedback.FireUpdate();
-						break;
-					}
-					case "is_in_last_page":
-					{
-						LayoutViewIsOnLastPageFeedback.FireUpdate();
-						break;
-					}
-                    case "can_switch_floating_share_content":
-                    {
-                        CanSwapContentWithThumbnailFeedback.FireUpdate();
-                        break;
-                    }
-				}
-                OnLayoutInfoChanged();
-			};
-
-			Status.NumberOfScreens.PropertyChanged += (o, a) =>
-			{
-				switch (a.PropertyName)
-				{
-					case "NumberOfScreens":
-					{
-						NumberOfScreensFeedback.FireUpdate();
-						break;
-					}
-				}
-			};
 		}
 
 		private void SetUpDirectory()
@@ -834,6 +591,7 @@ namespace PepperDash.Essentials.Plugins
                             OnCallStatusChange(existing);
                         }
                     }
+                    UpdateMeetingInfo();
                     break;
                 }
                 case MeetingStatus.ConnectingToMeeting:
@@ -859,6 +617,8 @@ namespace PepperDash.Essentials.Plugins
                     _currentMeetingId     = string.Empty;
                     _currentMeetingNumber = string.Empty;
                     _currentMeetingName   = string.Empty;
+                    _sdkIsHost            = false;
+                    _sdkHostName          = string.Empty;
                     if (ActiveCalls.Count > 0)
                     {
                         var call = ActiveCalls.FirstOrDefault();
@@ -869,6 +629,7 @@ namespace PepperDash.Essentials.Plugins
                             ActiveCalls.Remove(call);
                         }
                     }
+                    UpdateMeetingInfo();
                     break;
                 }
             }
@@ -876,12 +637,24 @@ namespace PepperDash.Essentials.Plugins
 
         private void OnControllerInstantMeetingStarted(object sender, SdkEventArgs e)
         {
-            this.LogInformation("InstantMeetingStarted code={Code}", e.ErrorCode);
+            this.LogInformation("InstantMeetingStarted code={Code} meetingNumber={Number}", e.ErrorCode, e.Message);
+            if (!string.IsNullOrEmpty(e.Message))
+            {
+                _currentMeetingNumber = e.Message;
+                _currentMeetingId     = e.Message;
+            }
+            UpdateMeetingInfo();
         }
 
         private void OnControllerStartPmiResult(object sender, SdkEventArgs e)
         {
-            this.LogInformation("StartPmiResult code={Code}", e.ErrorCode);
+            this.LogInformation("StartPmiResult code={Code} meetingNumber={Number}", e.ErrorCode, e.Message);
+            if (!string.IsNullOrEmpty(e.Message))
+            {
+                _currentMeetingNumber = e.Message;
+                _currentMeetingId     = e.Message;
+            }
+            UpdateMeetingInfo();
         }
 
         private void OnControllerExitMeeting(object sender, SdkEventArgs e)
@@ -890,9 +663,14 @@ namespace PepperDash.Essentials.Plugins
             _currentMeetingId     = string.Empty;
             _currentMeetingNumber = string.Empty;
             _currentMeetingName   = string.Empty;
+            _sdkIsHost            = false;
+            _sdkHostName          = string.Empty;
+            _sdkMeetingLocked     = false;
+            _sdkIsRecording       = false;
             ActiveCalls.Clear();
             Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
             OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
+            UpdateMeetingInfo();
         }
 
         private void OnControllerMeetingNeedsPassword(object sender, SdkEventArgs e)
@@ -911,6 +689,7 @@ namespace PepperDash.Essentials.Plugins
         {
             _sdkMeetingLocked = e.ErrorCode == 1;
             MeetingIsLockedFeedback.FireUpdate();
+            UpdateMeetingInfo();
         }
 
         private void OnControllerAudioMuteStatusChanged(object sender, SdkEventArgs e)
@@ -923,6 +702,7 @@ namespace PepperDash.Essentials.Plugins
         {
             _sdkIsRecording = e.ErrorCode == 1;
             MeetingIsRecordingFeedback.FireUpdate();
+            UpdateMeetingInfo();
         }
 
         private void OnControllerRecordingRequestReceived(object sender, SdkEventArgs e)
@@ -984,6 +764,7 @@ namespace PepperDash.Essentials.Plugins
         {
             _sdkIsHost = e.ErrorCode == 1;
             this.LogDebug("HostChanged: isHost={IsHost}", _sdkIsHost);
+            UpdateMeetingInfo();
         }
 
         private void OnControllerSharingStatusChanged(object sender, SharingStatusEventArgs e)
@@ -1765,11 +1546,15 @@ namespace PepperDash.Essentials.Plugins
 
 		public void CameraMuteOn()
 		{
+			_sdkCameraOff = true;
+			CameraIsOffFeedback.FireUpdate();
 			_controller.SetVideoState(false);
 		}
 
 		public void CameraMuteOff()
 		{
+			_sdkCameraOff = false;
+			CameraIsOffFeedback.FireUpdate();
 			_controller.SetVideoState(true);
 		}
 
@@ -1783,22 +1568,19 @@ namespace PepperDash.Essentials.Plugins
 
 		#region Implementation of IHasCameraAutoMode
 
-		//Zoom doesn't support camera auto modes. Setting this to just unmute video
 		public void CameraAutoModeOn()
 		{
-			CameraMuteOff();
-			throw new NotImplementedException("Zoom Room Doesn't support camera auto mode");
+			this.LogWarning("CameraAutoModeOn not supported by Zoom Room SDK");
 		}
 
-		//Zoom doesn't support camera auto modes. Setting this to just unmute video
 		public void CameraAutoModeOff()
 		{
-			_controller.SetVideoState(true);
+			this.LogWarning("CameraAutoModeOff not supported by Zoom Room SDK");
 		}
 
 		public void CameraAutoModeToggle()
 		{
-			throw new NotImplementedException("Zoom Room doesn't support camera auto mode");
+			this.LogWarning("CameraAutoModeToggle not supported by Zoom Room SDK");
 		}
 
 		public BoolFeedback CameraAutoModeIsOnFeedback { get; private set; }
@@ -2125,12 +1907,12 @@ namespace PepperDash.Essentials.Plugins
 
 		public void LocalLayoutToggleSingleProminent()
 		{
-			throw new NotImplementedException();
+			this.LogWarning("LocalLayoutToggleSingleProminent not supported by Zoom Room SDK");
 		}
 
 		public void MinMaxLayoutToggle()
 		{
-			throw new NotImplementedException();
+			this.LogWarning("MinMaxLayoutToggle not supported by Zoom Room SDK");
 		}
 
 		#endregion
@@ -2186,6 +1968,26 @@ namespace PepperDash.Essentials.Plugins
         }
 
         #endregion
+
+        /// <summary>
+        /// Builds a <see cref="MeetingInfo"/> from the current SDK state and assigns it,
+        /// firing <see cref="MeetingInfoChanged"/> if the value has changed.
+        /// </summary>
+        private void UpdateMeetingInfo()
+        {
+            MeetingInfo = new MeetingInfo(
+                _currentMeetingId,
+                _currentMeetingName,
+                _sdkHostName,
+                string.Empty,
+                "None",
+                _sdkIsHost,
+                _sdkSharingState > 0,
+                false,
+                _sdkMeetingLocked,
+                _sdkIsRecording,
+                false);
+        }
 
 	    #region Implementation of IHasPresentationOnlyMeeting
 

@@ -17,6 +17,8 @@ namespace PepperDash.Essentials.Plugins
         private readonly string _sdkConfigPath;
         private readonly string _activationCode;
         private bool _disposed;
+        private bool _initialized;
+        private string _pendingPassword;
 
         public string Key { get; }
 
@@ -45,35 +47,60 @@ namespace PepperDash.Essentials.Plugins
 
         public bool Initialize(string configPath)
         {
+            if (_initialized)
+            {
+                this.LogWarning("Initialize called more than once — ignoring");
+                return false;
+            }
+            _initialized = true;
+
             // Wire all SDK events before calling Initialize so no events are missed
-            _sdk.Initialized             += (s, e) => Initialized?.Invoke(this, e);
-            _sdk.ConnectionStateChanged  += (s, e) => ConnectionStateChanged?.Invoke(this, e);
-            _sdk.Error                   += (s, e) => Error?.Invoke(this, e);
+            _sdk.Initialized             += (s, e) => SafeRaise(() => Initialized?.Invoke(this, e));
+            _sdk.ConnectionStateChanged  += (s, e) => SafeRaise(() => ConnectionStateChanged?.Invoke(this, e));
+            _sdk.Error                   += (s, e) => SafeRaise(() => Error?.Invoke(this, e));
             _sdk.PairRoomResult          += (s, e) =>
             {
                 this.LogInformation("PairRoomResult: [{ErrorCode}] {Message}",
                     e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
-                PairRoomResult?.Invoke(this, e);
+                SafeRaise(() => PairRoomResult?.Invoke(this, e));
             };
-            _sdk.MeetingStatus           += (s, e) => MeetingStatusChanged?.Invoke(this, e);
-            _sdk.InstantMeetingStarted   += (s, e) => InstantMeetingStarted?.Invoke(this, e);
-            _sdk.StartPmiResult          += (s, e) => StartPmiResult?.Invoke(this, e);
-            _sdk.ExitMeeting             += (s, e) => ExitMeeting?.Invoke(this, e);
-            _sdk.MeetingNeedsPassword    += (s, e) => MeetingNeedsPassword?.Invoke(this, e);
-            _sdk.MeetingInvite           += (s, e) => MeetingInvite?.Invoke(this, e);
-            _sdk.MeetingLockStatus       += (s, e) => MeetingLockStatusChanged?.Invoke(this, e);
-            _sdk.AudioStatus             += (s, e) => AudioMuteStatusChanged?.Invoke(this, e);
-            _sdk.RecordingStatus         += (s, e) => RecordingStatusChanged?.Invoke(this, e);
-            _sdk.RecordingRequest        += (s, e) => RecordingRequestReceived?.Invoke(this, e);
-            _sdk.ParticipantsInitialized += (s, e) => ParticipantsInitialized?.Invoke(this, e);
-            _sdk.UserJoined              += (s, e) => UserJoined?.Invoke(this, e);
-            _sdk.UserLeft                += (s, e) => UserLeft?.Invoke(this, e);
-            _sdk.UserUpdated             += (s, e) => UserUpdated?.Invoke(this, e);
-            _sdk.ParticipantCount        += (s, e) => ParticipantCountChanged?.Invoke(this, e);
-            _sdk.HostChanged             += (s, e) => HostChanged?.Invoke(this, e);
-            _sdk.SharingStatusChanged    += (s, e) => SharingStatusChanged?.Invoke(this, e);
-            _sdk.SIPCallStatus           += (s, e) => SipCallStatusChanged?.Invoke(this, e);
-            _sdk.ControlSystemEnabled    += (s, e) => ZrcsEnabledChanged?.Invoke(this, e);
+            _sdk.MeetingStatus           += (s, e) => SafeRaise(() => MeetingStatusChanged?.Invoke(this, e));
+            _sdk.InstantMeetingStarted   += (s, e) => SafeRaise(() => InstantMeetingStarted?.Invoke(this, e));
+            _sdk.StartPmiResult          += (s, e) => SafeRaise(() => StartPmiResult?.Invoke(this, e));
+            _sdk.ExitMeeting             += (s, e) =>
+            {
+                _pendingPassword = null; // C4: don't auto-submit stale password to a later meeting
+                SafeRaise(() => ExitMeeting?.Invoke(this, e));
+            };
+            _sdk.MeetingNeedsPassword    += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(_pendingPassword))
+                {
+                    // Auto-supply the password that was passed with JoinMeetingWithPassword
+                    this.LogDebug("MeetingNeedsPassword — auto-submitting cached password");
+                    var pw = _pendingPassword;
+                    _pendingPassword = null;
+                    _sdk.SendMeetingPassword(pw);
+                }
+                else
+                {
+                    SafeRaise(() => MeetingNeedsPassword?.Invoke(this, e));
+                }
+            };
+            _sdk.MeetingInvite           += (s, e) => SafeRaise(() => MeetingInvite?.Invoke(this, e));
+            _sdk.MeetingLockStatus       += (s, e) => SafeRaise(() => MeetingLockStatusChanged?.Invoke(this, e));
+            _sdk.AudioStatus             += (s, e) => SafeRaise(() => AudioMuteStatusChanged?.Invoke(this, e));
+            _sdk.RecordingStatus         += (s, e) => SafeRaise(() => RecordingStatusChanged?.Invoke(this, e));
+            _sdk.RecordingRequest        += (s, e) => SafeRaise(() => RecordingRequestReceived?.Invoke(this, e));
+            _sdk.ParticipantsInitialized += (s, e) => SafeRaise(() => ParticipantsInitialized?.Invoke(this, e));
+            _sdk.UserJoined              += (s, e) => SafeRaise(() => UserJoined?.Invoke(this, e));
+            _sdk.UserLeft                += (s, e) => SafeRaise(() => UserLeft?.Invoke(this, e));
+            _sdk.UserUpdated             += (s, e) => SafeRaise(() => UserUpdated?.Invoke(this, e));
+            _sdk.ParticipantCount        += (s, e) => SafeRaise(() => ParticipantCountChanged?.Invoke(this, e));
+            _sdk.HostChanged             += (s, e) => SafeRaise(() => HostChanged?.Invoke(this, e));
+            _sdk.SharingStatusChanged    += (s, e) => SafeRaise(() => SharingStatusChanged?.Invoke(this, e));
+            _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
+            _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
 
             var effectivePath = string.IsNullOrEmpty(configPath) ? _sdkConfigPath : configPath;
             var result = _sdk.Initialize(effectivePath);
@@ -96,6 +123,18 @@ namespace PepperDash.Essentials.Plugins
             }
 
             return result;
+        }
+
+        private void SafeRaise(Action raise)
+        {
+            try
+            {
+                raise();
+            }
+            catch (Exception ex)
+            {
+                this.LogError("Exception in SDK event handler: {Message}", ex.Message);
+            }
         }
 
         public int GetConnectionState() => _disposed ? 2 : _sdk.GetConnectionState();
@@ -121,10 +160,9 @@ namespace PepperDash.Essentials.Plugins
         public bool JoinMeeting(string meetingNumber)       => _sdk.JoinMeeting(meetingNumber);
         public bool JoinMeetingWithPassword(string meetingNumber, string password)
         {
-            var result = _sdk.JoinMeeting(meetingNumber);
-            if (result && !string.IsNullOrEmpty(password))
-                _sdk.SendMeetingPassword(password);
-            return result;
+            // Cache the password — it will be sent when MeetingNeedsPassword fires
+            _pendingPassword = password;
+            return _sdk.JoinMeeting(meetingNumber);
         }
         public bool JoinMeetingWithUrl(string url)          => _sdk.JoinMeetingWithURL(url);
         public bool EndMeeting()                            => _sdk.EndMeeting();
@@ -218,6 +256,7 @@ namespace PepperDash.Essentials.Plugins
         {
             if (_disposed) return;
             _disposed = true;
+            CrestronEnvironment.ProgramStatusEventHandler -= OnProgramStatusEvent;
             try
             {
                 _sdk.Dispose();

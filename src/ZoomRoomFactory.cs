@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
@@ -17,15 +18,25 @@ namespace PepperDash.Essentials.Plugins
 
         public override EssentialsDevice BuildDevice(DeviceConfig dc)
         {
-            Log.Debug("Factory: creating ZoomRoom device '{Key}'", dc.Key);
+            try
+            {
+                Log.Debug("Factory: creating ZoomRoom device '{Key}'", dc.Key);
 
-            var props = dc.Properties.ToObject<ZoomRoomPropertiesConfig>();
-            var controller = new ZrcSdkController(
-                dc.Key + "-zrc",
-                props.SdkConfigPath,
-                props.ActivationCode);
+                var props = dc.Properties.ToObject<ZoomRoomPropertiesConfig>();
+                var controller = new ZrcSdkController(
+                    dc.Key + "-zrc",
+                    props.SdkConfigPath,
+                    props.ActivationCode);
 
-            return new ZoomRoom(dc, controller);
+                return new ZoomRoom(dc, controller);
+            }
+            catch (Exception ex)
+            {
+                // The Essentials DeviceFactory swallows build exceptions and only reports
+                // "Cannot load unknown device type", so log the real cause explicitly here.
+                Log.Error(ex, "Factory: failed to build ZoomRoom device '{Key}': {Message}", dc.Key, ex.Message);
+                throw;
+            }
         }
     }
 }
