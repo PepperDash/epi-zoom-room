@@ -212,6 +212,19 @@ namespace PepperDash.Essentials.Plugins
         public bool RetryPair()     => _sdk.RetryToPairRoom();
         public bool Unpair()        => _sdk.UnpairRoom();
 
+        public bool RepairWithConfiguredCode()
+        {
+            if (string.IsNullOrEmpty(_activationCode))
+            {
+                this.LogWarning("RepairWithConfiguredCode called but no activationCode is configured. Use 'pairZoomRoom <code>' instead.");
+                return false;
+            }
+
+            this.LogInformation("Clearing stored credentials and re-pairing with configured activation code.");
+            _sdk.UnpairRoom();
+            return _sdk.PairRoomWithActivationCode(_activationCode);
+        }
+
         // ── Device ────────────────────────────────────────────────────────────
 
         public bool WakeUp()    => _sdk.WakeZoomRoomUp();

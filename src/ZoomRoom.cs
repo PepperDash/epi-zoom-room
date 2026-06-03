@@ -509,6 +509,10 @@ namespace PepperDash.Essentials.Plugins
 				s => _controller.Unpair(),
 				"unpairZoomRoom", "Unpair from Zoom Room", ConsoleAccessLevelEnum.AccessOperator);
 
+			CrestronConsole.AddNewConsoleCommand(
+				s => _controller.RepairWithConfiguredCode(),
+				"forceRepairZoom", "Clear stored credentials and re-pair using the configured activation code", ConsoleAccessLevelEnum.AccessOperator);
+
 			return base.CustomActivate();
 		}
 

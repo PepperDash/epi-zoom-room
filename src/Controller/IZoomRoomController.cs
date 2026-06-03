@@ -26,6 +26,13 @@ namespace PepperDash.Essentials.Plugins
         bool RetryPair();
         bool Unpair();
 
+        /// <summary>
+        /// Clears any stored pairing credentials and re-pairs using the activation code
+        /// from configuration. Use this after rotating the activation code, since a stale
+        /// stored token otherwise forces the reconnect path and ignores the new code.
+        /// </summary>
+        bool RepairWithConfiguredCode();
+
         // ── Device ────────────────────────────────────────────────────────────
 
         bool WakeUp();
