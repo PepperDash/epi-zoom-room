@@ -10,17 +10,18 @@ using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Devices.Common.Codec;
 using PepperDash.Essentials.Devices.Common.VideoCodec.Interfaces;
 using PepperDash.Essentials.Plugins;
+using ZoomRoomDevice = PepperDash.Essentials.Plugins.ZoomRoom;
 
 namespace PepperDash.Essentials.AppServer.Messengers
 {
     public class ZoomRoomMessenger : MessengerBase
     {
-        private readonly ZoomRoom _codec;
+        private readonly ZoomRoomDevice _codec;
 
         public ZoomRoomMessenger(string key, string messagePath, EssentialsDevice device)
             : base(key, messagePath, device)
         {
-            _codec = device as ZoomRoom ?? throw new ArgumentNullException(nameof(device));
+            _codec = device as ZoomRoomDevice ?? throw new ArgumentNullException(nameof(device));
         }
 
         protected override void RegisterActions()

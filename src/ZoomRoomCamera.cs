@@ -53,7 +53,7 @@ namespace PepperDash.Essentials.Plugins
         void SendCommand(eZoomRoomCameraState state, eZoomRoomCameraAction action)
         {
             LastAction = action;
-            ParentCodec.SendText(string.Format("zCommand Call CameraControl Id: {0} State: {1} Action: {2}", Id, state, action));
+            Serilog.Log.Warning("Camera control commands not supported by Zoom Room SDK");
         }
 
         void StartContinueTimer()

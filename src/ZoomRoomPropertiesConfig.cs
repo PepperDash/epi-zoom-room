@@ -34,5 +34,17 @@ namespace PepperDash.Essentials.Plugins
 
         [JsonProperty("minutesBeforeMeetingStart")]
         public int MinutesBeforeMeetingStart { get; set; }
+
+        [JsonProperty("activationCode")]
+        public string ActivationCode { get; set; }
+
+        /// <summary>
+        /// Path passed to ZrcSdk.Initialize(). Defaults to /user/zrcsdk (writable, persistent volume).
+        /// </summary>
+        [JsonProperty("sdkConfigPath")]
+        public string SdkConfigPath { get; set; } = "/user/zrcsdk";
+
+        // communicationMonitorProperties is kept for back-compat but is no longer used —
+        // the SDK is event-driven and requires no polling.
     }
 }

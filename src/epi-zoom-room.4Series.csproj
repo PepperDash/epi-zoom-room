@@ -20,6 +20,7 @@
   <ItemGroup>
     <PackageReference Include="Crestron.SimplSharp.SDK.ProgramLibrary" Version="2.21.128" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="PepperDash.ZoomRoom.Sdk" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,5 +28,13 @@
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
   </ItemGroup>
+
+  <!-- Copy the native ZRC SDK wrapper .so into the output dir so it is included in the .cplz -->
+  <Target Name="CopyZrcSdkNative" AfterTargets="Build">
+    <ItemGroup>
+      <ZrcNative Include="$(NuGetPackageRoot)pepperdash.zoomroom.sdk\**\runtimes\linux-arm\native\*.so" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ZrcNative)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

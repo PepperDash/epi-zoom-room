@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using PepperDash.Core;
-using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
+using Serilog;
 using Serilog.Events;
 
 namespace PepperDash.Essentials.Plugins
@@ -17,9 +17,15 @@ namespace PepperDash.Essentials.Plugins
 
         public override EssentialsDevice BuildDevice(DeviceConfig dc)
         {
-            Debug.LogMessage(LogEventLevel.Information, "Factory Attempting to create new ZoomRoom Device");
-            var comm = CommFactory.CreateCommForDevice(dc);
-            return new ZoomRoom(dc, comm);
+            Log.Debug("Factory: creating ZoomRoom device '{Key}'", dc.Key);
+
+            var props = dc.Properties.ToObject<ZoomRoomPropertiesConfig>();
+            var controller = new ZrcSdkController(
+                dc.Key + "-zrc",
+                props.SdkConfigPath,
+                props.ActivationCode);
+
+            return new ZoomRoom(dc, controller);
         }
     }
 }
