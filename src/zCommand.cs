@@ -1,11 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
-using PepperDash.Core;
-using PepperDash.Essentials.Devices.Common.Codec;
 using PepperDash.Essentials.Devices.Common.VideoCodec.Interfaces;
-using Serilog.Events;
 
 namespace PepperDash.Essentials.Plugins
 {
@@ -14,112 +10,6 @@ namespace PepperDash.Essentials.Plugins
     /// </summary>
     public class zCommand
     {
-        public class BookingsListResult
-        {
-            [JsonProperty("accessRole")]
-            public string AccessRole { get; set; }
-            [JsonProperty("calendarChangeKey")]
-            public string CalendarChangeKey { get; set; }
-            [JsonProperty("calendarID")]
-            public string CalendarId { get; set; }
-            [JsonProperty("checkIn")]
-            public bool CheckIn { get; set; }
-            [JsonProperty("creatorEmail")]
-            public string CreatorEmail { get; set; }
-            [JsonProperty("creatorName")]
-            public string CreatorName { get; set; }
-            [JsonProperty("endTime")]
-            public DateTime EndTime { get; set; }
-            [JsonProperty("hostName")]
-            public string HostName { get; set; }
-            [JsonProperty("isInstantMeeting")]
-            public bool IsInstantMeeting { get; set; }
-            [JsonProperty("isPrivate")]
-            public bool IsPrivate { get; set; }
-            [JsonProperty("location")]
-            public string Location { get; set; }
-            [JsonProperty("meetingName")]
-            public string MeetingName { get; set; }
-            [JsonProperty("meetingNumber")]
-            public string MeetingNumber { get; set; }
-            [JsonProperty("scheduledFrom")]
-            public string ScheduledFrom { get; set; }
-            [JsonProperty("startTime")]
-            public DateTime StartTime { get; set; }
-            [JsonProperty("third_party")]
-            public ThirdParty ThirdParty { get; set; }
-        }
-
-        public static List<Meeting> GetGenericMeetingsFromBookingResult(List<BookingsListResult> bookings,
-            int minutesBeforeMeetingStart)
-        {
-            var rv = GetGenericMeetingsFromBookingResult(bookings);
-
-            foreach (var meeting in rv)
-            {
-                meeting.MinutesBeforeMeeting = minutesBeforeMeetingStart;
-            }
-
-            return rv;
-        }
-        /// <summary>
-        /// Extracts the necessary meeting values from the Zoom bookings response and converts them to the generic class
-        /// </summary>
-        /// <param name="bookings"></param>
-        /// <returns></returns>
-        public static List<Meeting> GetGenericMeetingsFromBookingResult(List<BookingsListResult> bookings)
-        {
-            var meetings = new List<Meeting>();
-
-            if (Debug.Level > 0)
-            {
-                Debug.LogMessage(LogEventLevel.Information, "Meetings List:\n");
-            }
-
-            foreach (var b in bookings)
-            {
-                var meeting = new Meeting();
-
-                if (b.MeetingNumber != null)
-                    meeting.Id = b.MeetingNumber;
-                if (b.CreatorName != null)
-                    meeting.Organizer = b.CreatorName;
-                if (b.MeetingName != null)
-                    meeting.Title = b.MeetingName;
-                //if (b.Agenda != null)
-                //    meeting.Agenda = b.Agenda.Value;
-                if (b.StartTime != null)
-                    meeting.StartTime = b.StartTime;
-                if (b.EndTime != null)
-                    meeting.EndTime = b.EndTime;
-
-                meeting.Privacy = b.IsPrivate ? eMeetingPrivacy.Private : eMeetingPrivacy.Public;
-
-                meeting.Dialable = meeting.Id != "0";
-
-                // No meeting.Calls data exists for Zoom Rooms.  Leaving out for now.
-                var now = DateTime.Now;
-                if (meeting.StartTime < now && meeting.EndTime < now)
-                {
-                    Debug.LogMessage(LogEventLevel.Information, "Skipping meeting {MeetingTitle}. Meeting is in the past.", meeting.Title);
-                    continue;
-                }
-
-                meetings.Add(meeting);
-
-                if (Debug.Level > 0)
-                {
-                    Debug.LogMessage(LogEventLevel.Information, "Title: {MeetingTitle}, ID: {MeetingId}, Organizer: {Organizer}", meeting.Title, meeting.Id, meeting.Organizer);
-                    Debug.LogMessage(LogEventLevel.Information, "    Start Time: {StartTime}, End Time: {EndTime}, Duration: {Duration}", meeting.StartTime, meeting.EndTime, meeting.Duration);
-                    Debug.LogMessage(LogEventLevel.Information, "    Joinable: {Joinable}\n", meeting.Joinable);
-                }
-            }
-
-            meetings.OrderBy(m => m.StartTime);
-
-            return meetings;
-        }
-
         public class HandStatus
         {
             // example return of the "hand_status" object

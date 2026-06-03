@@ -6,8 +6,6 @@ using System.Text;
 using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.CrestronThread;
 using Crestron.SimplSharpPro.DeviceSupport;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
@@ -55,17 +53,19 @@ namespace PepperDash.Essentials.Plugins
         private string _activeSipCallId      = string.Empty;
         private bool _meetingPasswordRequired;
 
+        private readonly object _participantLock = new object();
+
         private IHasCameraControls _selectedCamera;
         private CodecDirectory _currentDirectoryResult;
 
         private readonly ZoomRoomPropertiesConfig _props;
 
-        public ZoomRoom(DeviceConfig config, IZoomRoomController controller)
+        public ZoomRoom(DeviceConfig config, IZoomRoomController controller, ZoomRoomPropertiesConfig props)
 			: base(config)
 		{
             DefaultMeetingDurationMin = 30;
 
-			_props = JsonConvert.DeserializeObject<ZoomRoomPropertiesConfig>(config.Properties.ToString());
+			_props = props;
 
             _controller = controller;
 
@@ -718,19 +718,32 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerParticipantsInitialized(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
-            Participants.CurrentParticipants = MapParticipants(e.Participants);
+            lock (_participantLock)
+            {
+                Participants.CurrentParticipants = MapParticipants(e.Participants);
+            }
         }
 
         private void OnControllerUserJoined(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
-            foreach (var info in e.Participants)
+            lock (_participantLock)
             {
-                var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                if (existing == null)
+                if (e.NeedCleanUp)
                 {
-                    var p = MapParticipant(info);
-                    Participants.CurrentParticipants.Add(p);
+                    Participants.CurrentParticipants = MapParticipants(e.Participants);
+                }
+                else
+                {
+                    foreach (var info in e.Participants)
+                    {
+                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
+                        if (existing == null)
+                        {
+                            var p = MapParticipant(info);
+                            Participants.CurrentParticipants.Add(p);
+                        }
+                    }
                 }
             }
             Participants.OnParticipantsChanged();
@@ -739,11 +752,21 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerUserLeft(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
-            foreach (var info in e.Participants)
+            lock (_participantLock)
             {
-                var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                if (existing != null)
-                    Participants.CurrentParticipants.Remove(existing);
+                if (e.NeedCleanUp)
+                {
+                    Participants.CurrentParticipants = MapParticipants(e.Participants);
+                }
+                else
+                {
+                    foreach (var info in e.Participants)
+                    {
+                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
+                        if (existing != null)
+                            Participants.CurrentParticipants.Remove(existing);
+                    }
+                }
             }
             Participants.OnParticipantsChanged();
         }
@@ -751,14 +774,26 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerUserUpdated(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
-            foreach (var info in e.Participants)
+            lock (_participantLock)
             {
-                var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                if (existing != null)
+                if (e.NeedCleanUp)
                 {
-                    existing.Name       = info.UserName;
-                    existing.IsHost     = info.IsHost;
-                    existing.AudioMuteFb = info.AudioMuted;
+                    Participants.CurrentParticipants = MapParticipants(e.Participants);
+                }
+                else
+                {
+                    foreach (var info in e.Participants)
+                    {
+                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
+                        if (existing != null)
+                        {
+                            existing.Name           = info.UserName;
+                            existing.IsHost         = info.IsHost;
+                            existing.AudioMuteFb    = info.AudioMuted;
+                            existing.VideoMuteFb    = !info.VideoSending;
+                            existing.HandIsRaisedFb = info.HandRaised;
+                        }
+                    }
                 }
             }
             Participants.OnParticipantsChanged();
@@ -796,10 +831,14 @@ namespace PepperDash.Essentials.Plugins
         {
             return new Participant
             {
-                UserId       = info.UserID,
-                Name         = info.UserName,
-                IsHost       = info.IsHost,
-                AudioMuteFb  = info.AudioMuted,
+                UserId         = info.UserID,
+                Name           = info.UserName,
+                IsHost         = info.IsHost,
+                IsMyself       = info.IsMySelf,
+                AudioMuteFb    = info.AudioMuted,
+                VideoMuteFb    = !info.VideoSending,
+                HandIsRaisedFb = info.HandRaised,
+                // IsPinnedFb: SDK does not expose per-participant pin state; defaults to false.
             };
         }
 
@@ -850,7 +889,7 @@ namespace PepperDash.Essentials.Plugins
 
 		public override void MuteOn()
 		{
-			SetVolume(0);
+			this.LogWarning("Volume mute not supported by Zoom Room SDK");
 		}
 
 		public override void MuteToggle()

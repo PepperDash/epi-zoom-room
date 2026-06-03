@@ -22,13 +22,16 @@ namespace PepperDash.Essentials.Plugins
             {
                 Log.Information("Factory: creating ZoomRoom device '{Key}'", dc.Key);
 
+                if (dc.Properties == null)
+                    throw new InvalidOperationException($"ZoomRoom device '{dc.Key}' is missing a Properties object in config.");
+
                 var props = dc.Properties.ToObject<ZoomRoomPropertiesConfig>();
                 var controller = new ZrcSdkController(
                     dc.Key + "-zrc",
                     props.SdkConfigPath,
                     props.ActivationCode);
 
-                return new ZoomRoom(dc, controller);
+                return new ZoomRoom(dc, controller, props);
             }
             catch (Exception ex)
             {

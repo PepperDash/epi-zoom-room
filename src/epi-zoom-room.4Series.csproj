@@ -7,6 +7,8 @@
     <AssemblyName>PepperDash.Essentials.Plugins.Zoom.Room</AssemblyName>
     <Configurations>Debug;Release</Configurations>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- CS0162: Unreachable code detected — emitted by the Crestron SDK's generated CPLZ-packaging temp file; not from plugin source. -->
+    <NoWarn>$(NoWarn);CS0162</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
