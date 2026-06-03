@@ -1277,6 +1277,16 @@ namespace PepperDash.Essentials.Plugins
 			_controller.LeaveMeeting();
         }
 
+		/// <summary>
+		/// Ends the current meeting for all participants (host action), as opposed to <see cref="LeaveMeeting"/>
+		/// which only removes this Zoom Room from the meeting.
+		/// </summary>
+		public void EndMeetingForAll()
+		{
+			_meetingPasswordRequired = false;
+			_controller.EndMeeting();
+		}
+
 		public override void EndCall(CodecActiveCallItem call)
 		{
 			_meetingPasswordRequired = false;
