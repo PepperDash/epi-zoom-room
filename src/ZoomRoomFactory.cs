@@ -20,7 +20,7 @@ namespace PepperDash.Essentials.Plugins
         {
             try
             {
-                Log.Debug("Factory: creating ZoomRoom device '{Key}'", dc.Key);
+                Log.Information("Factory: creating ZoomRoom device '{Key}'", dc.Key);
 
                 var props = dc.Properties.ToObject<ZoomRoomPropertiesConfig>();
                 var controller = new ZrcSdkController(

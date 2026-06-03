@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Reflection;
 using Crestron.SimplSharp;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
@@ -28,10 +30,67 @@ namespace PepperDash.Essentials.Plugins
             _sdkConfigPath  = sdkConfigPath  ?? "/user/zrcsdk";
             _activationCode = activationCode ?? string.Empty;
 
+            // The ZRC SDK's DllImportResolver loads the native wrapper only from
+            // /usr/lib/libzrcsdkwrapperpdt.so. The wrapper is embedded in this assembly,
+            // so extract it into /usr/lib before constructing the SDK.
+            StageNativeWrapper();
+
             _sdk = new ZrcSdk();
 
             // Dispose on program stop — mirrors the ControlSystem example
             CrestronEnvironment.ProgramStatusEventHandler += OnProgramStatusEvent;
+        }
+
+        private const string NativeWrapperFileName = "libzrcsdkwrapperpdt.so";
+        private const string NativeWrapperTargetPath = "/usr/lib/libzrcsdkwrapperpdt.so";
+
+        /// <summary>
+        /// Extracts the native ZRC SDK wrapper embedded in this assembly into <c>/usr/lib</c>, where
+        /// the SDK's <c>DllImportResolver</c> expects it. Essentials' plugin loader deletes the .cplz
+        /// and its unzip temp dir after moving only the managed .dll into <c>loadedAssemblies</c>, so
+        /// the wrapper must travel inside the assembly as an embedded resource. No-op if an up-to-date
+        /// copy is already present.
+        /// </summary>
+        private void StageNativeWrapper()
+        {
+            try
+            {
+                var assembly = Assembly.GetExecutingAssembly();
+                using var resourceStream = assembly.GetManifestResourceStream(NativeWrapperFileName);
+
+                if (resourceStream == null)
+                {
+                    this.LogError(
+                        "Embedded native wrapper '{File}' not found in plugin assembly. " +
+                        "Available resources: {Resources}. ZRC SDK will fail to load.",
+                        NativeWrapperFileName, string.Join(", ", assembly.GetManifestResourceNames()));
+                    return;
+                }
+
+                if (File.Exists(NativeWrapperTargetPath) &&
+                    new FileInfo(NativeWrapperTargetPath).Length == resourceStream.Length)
+                {
+                    this.LogInformation(
+                        "Native wrapper already staged at '{Target}' (size matches) — skipping copy.",
+                        NativeWrapperTargetPath);
+                    return;
+                }
+
+                using (var fileStream = File.Create(NativeWrapperTargetPath))
+                {
+                    resourceStream.CopyTo(fileStream);
+                }
+
+                this.LogInformation(
+                    "Staged embedded native wrapper '{File}' -> '{Target}' ({Bytes} bytes).",
+                    NativeWrapperFileName, NativeWrapperTargetPath, resourceStream.Length);
+            }
+            catch (Exception ex)
+            {
+                this.LogError(ex,
+                    "Failed to stage native wrapper into '{Target}': {Message}",
+                    NativeWrapperTargetPath, ex.Message);
+            }
         }
 
         private void OnProgramStatusEvent(eProgramStatusEventType eventType)

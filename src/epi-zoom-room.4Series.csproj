@@ -20,7 +20,7 @@
   <ItemGroup>
     <PackageReference Include="Crestron.SimplSharp.SDK.ProgramLibrary" Version="2.21.128" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="PepperDash.ZoomRoom.Sdk" Version="1.0.0" />
+    <PackageReference Include="PepperDash.ZoomRoom.Sdk" Version="1.0.0" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,12 +29,16 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- Copy the native ZRC SDK wrapper .so into the output dir so it is included in the .cplz -->
-  <Target Name="CopyZrcSdkNative" AfterTargets="Build">
-    <ItemGroup>
-      <ZrcNative Include="$(NuGetPackageRoot)pepperdash.zoomroom.sdk\**\runtimes\linux-arm\native\*.so" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ZrcNative)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
-  </Target>
+  <!--
+    Embed the native ZRC SDK wrapper into the plugin assembly. Essentials' plugin loader
+    extracts the .cplz to a temp dir, moves only *.dll into loadedAssemblies, then deletes
+    the temp dir AND the .cplz. A loose .so in the package therefore never survives to runtime.
+    Embedding it in the DLL lets ZrcSdkController stage it to /usr/lib at startup.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(PkgPepperDash_ZoomRoom_Sdk)\runtimes\linux-arm\native\libzrcsdkwrapperpdt.so">
+      <LogicalName>libzrcsdkwrapperpdt.so</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 
 </Project>
