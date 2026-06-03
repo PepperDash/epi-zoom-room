@@ -53,7 +53,17 @@ namespace PepperDash.Essentials.Plugins
         void SendCommand(eZoomRoomCameraState state, eZoomRoomCameraAction action)
         {
             LastAction = action;
-            Serilog.Log.Warning("Camera control commands not supported by Zoom Room SDK");
+
+            // Far-end (participant) cameras carry the participant userID in Id and are controlled
+            // via the SDK's ControlUserCamera. Near-end camera control (ControlLocalCamera) needs a
+            // camera device-ID string the plugin does not yet track, so it stays unsupported for now.
+            if (this is IAmFarEndCamera && Id.HasValue && Id.Value != 0)
+            {
+                ParentCodec.ControlFarEndCamera(Id.Value, state, action);
+                return;
+            }
+
+            Serilog.Log.Warning("Near-end camera control not yet wired to the Zoom Room SDK (requires camera device ID)");
         }
 
         void StartContinueTimer()

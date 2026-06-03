@@ -105,12 +105,25 @@ public class ControllerAbstractionTests
     [InlineData("MuteUserVideo")]
     [InlineData("PinUserOnScreen")]
     [InlineData("UnpinUserFromScreen")]
+    [InlineData("ControlUserCamera")]
     public void IZoomRoomController_Has_Video_Method(string methodName)
     {
         ControllerInterfaceType
             .GetMethods()
             .Should().Contain(m => m.Name == methodName,
                 $"IZoomRoomController must expose '{methodName}' for video control");
+    }
+
+    [Theory]
+    [InlineData("SetScreenLayout")]
+    [InlineData("SetVideoOrder")]
+    [InlineData("UpdateVideoLayoutStyle")]
+    public void IZoomRoomController_Has_Layout_Method(string methodName)
+    {
+        ControllerInterfaceType
+            .GetMethods()
+            .Should().Contain(m => m.Name == methodName,
+                $"IZoomRoomController must expose '{methodName}' for layout control");
     }
 
     [Theory]

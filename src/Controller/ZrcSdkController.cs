@@ -266,11 +266,13 @@ namespace PepperDash.Essentials.Plugins
         public bool MuteUserVideo(int userId, bool mute)       => _sdk.MuteUserVideo(userId, mute);
         public bool PinUserOnScreen(int userId, int screenIndex = 0)    => _sdk.PinUserOnScreen(userId, screenIndex);
         public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => _sdk.UnpinUserFromScreen(userId, screenIndex);
+        public bool ControlUserCamera(int userId, int action, int type) => _sdk.ControlUserCamera(userId, action, type);
 
         // ── Layout ────────────────────────────────────────────────────────────
 
         public int SetScreenLayout(int screen, int layoutSourceType) => _sdk.SetScreenLayout(screen, layoutSourceType);
         public int SetVideoOrder(int videoOrderType)                 => _sdk.SetVideoOrder(videoOrderType);
+        public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => _sdk.UpdateVideoLayoutStyle(videoLayoutStyle);
 
         // ── Recording ─────────────────────────────────────────────────────────
 

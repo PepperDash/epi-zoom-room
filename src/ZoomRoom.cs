@@ -1444,7 +1444,45 @@ namespace PepperDash.Essentials.Plugins
 		/// </summary>
 		private void UpdateFarEndCameras()
 		{
-			// TODO: set up far end cameras for the current call
+			// TODO: set up far end cameras for the current call.
+			// Control of an existing far-end camera is wired via ControlFarEndCamera(); this method
+			// is the remaining piece — discovering which participants expose far-end camera control
+			// and creating ZoomRoomFarEndCamera instances for them.
+		}
+
+		/// <summary>
+		/// Sends a far-end (participant) camera PTZ command to the SDK. The camera's <c>Id</c> is the
+		/// target participant userID. Maps the plugin's camera enums to the ZRC SDK's
+		/// CameraControlAction / CameraControlType ints.
+		/// </summary>
+		internal void ControlFarEndCamera(int userId, eZoomRoomCameraState state, eZoomRoomCameraAction action)
+		{
+			int controlType;   // CameraControlType
+			switch (state)
+			{
+				case eZoomRoomCameraState.Start:    controlType = 0; break; // CameraControlTypeStart
+				case eZoomRoomCameraState.Continue: controlType = 1; break; // CameraControlTypeContinue
+				case eZoomRoomCameraState.Stop:     controlType = 2; break; // CameraControlTypeStop
+				default:
+					this.LogWarning("ControlFarEndCamera: unsupported camera state {State}", state);
+					return;
+			}
+
+			int controlAction; // CameraControlAction
+			switch (action)
+			{
+				case eZoomRoomCameraAction.Up:    controlAction = 0; break; // CameraControlActionMoveUp
+				case eZoomRoomCameraAction.Down:  controlAction = 1; break; // CameraControlActionMoveDown
+				case eZoomRoomCameraAction.Left:  controlAction = 2; break; // CameraControlActionMoveLeft
+				case eZoomRoomCameraAction.Right: controlAction = 3; break; // CameraControlActionMoveRight
+				case eZoomRoomCameraAction.In:    controlAction = 4; break; // CameraControlActionZoomIn
+				case eZoomRoomCameraAction.Out:   controlAction = 5; break; // CameraControlActionZoomOut
+				default:
+					this.LogWarning("ControlFarEndCamera: unsupported camera action {Action}", action);
+					return;
+			}
+
+			_controller.ControlUserCamera(userId, controlAction, controlType);
 		}
 
 		#region Implementation of IHasParticipants
@@ -1872,7 +1910,26 @@ namespace PepperDash.Essentials.Plugins
 		public void SetLayout(zConfiguration.eLayoutStyle layoutStyle)
 		{
 			LastSelectedLayout = layoutStyle;
-			_controller.SetVideoOrder((int)layoutStyle);
+
+			// Map Essentials layout style -> ZRC SDK VideoLayoutStyle int.
+			// This must NOT be a direct (int) cast: eLayoutStyle is a [Flags] enum
+			// (Gallery=1, Speaker=2, Strip=4, ShareAll=8) whose values do not line up
+			// with the SDK's VideoLayoutStyle (Gallery=1, Speaker=2, Thumbnail=3,
+			// ContentOnly=4). The previous code cast to SetVideoOrder, which only
+			// reorders participant tiles and ignored Strip/ShareAll (out of range).
+			int videoLayoutStyle;
+			switch (layoutStyle)
+			{
+				case zConfiguration.eLayoutStyle.Gallery:  videoLayoutStyle = 1; break; // VideoLayoutStyleGallery
+				case zConfiguration.eLayoutStyle.Speaker:  videoLayoutStyle = 2; break; // VideoLayoutStyleSpeaker
+				case zConfiguration.eLayoutStyle.Strip:    videoLayoutStyle = 3; break; // VideoLayoutStyleThumbnail
+				case zConfiguration.eLayoutStyle.ShareAll: videoLayoutStyle = 4; break; // VideoLayoutStyleContentOnly
+				default:
+					this.LogWarning("SetLayout: no SDK VideoLayoutStyle mapping for {LayoutStyle}", layoutStyle);
+					return;
+			}
+
+			_controller.UpdateVideoLayoutStyle(videoLayoutStyle);
 		}
 
 		public void SwapContentWithThumbnail()

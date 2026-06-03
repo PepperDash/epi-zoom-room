@@ -70,10 +70,16 @@ namespace PepperDash.Essentials.Plugins
         bool PinUserOnScreen(int userId, int screenIndex = 0);
         bool UnpinUserFromScreen(int userId, int screenIndex = 0);
 
+        /// <summary>Controls a far-end (participant) camera. action = CameraControlAction, type = CameraControlType (Start/Continue/Stop).</summary>
+        bool ControlUserCamera(int userId, int action, int type);
+
         // ── Layout ────────────────────────────────────────────────────────────
 
         int SetScreenLayout(int screen, int layoutSourceType);
         int SetVideoOrder(int videoOrderType);
+
+        /// <summary>Sets the meeting video layout style (VideoLayoutStyle: Gallery=1, Speaker=2, Thumbnail=3, ContentOnly=4, DynamicLayout=6). Distinct from SetVideoOrder, which only reorders tiles.</summary>
+        int UpdateVideoLayoutStyle(int videoLayoutStyle);
 
         // ── Recording ─────────────────────────────────────────────────────────
 
