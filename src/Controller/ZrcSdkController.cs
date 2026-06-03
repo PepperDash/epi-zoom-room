@@ -30,9 +30,10 @@ namespace PepperDash.Essentials.Plugins
             _sdkConfigPath  = sdkConfigPath  ?? "/user/zrcsdk";
             _activationCode = activationCode ?? string.Empty;
 
-            // The ZRC SDK's DllImportResolver loads the native wrapper only from
-            // /usr/lib/libzrcsdkwrapperpdt.so. The wrapper is embedded in this assembly,
-            // so extract it into /usr/lib before constructing the SDK.
+            // The ZRC SDK loads its native wrapper (libzrcsdkwrapperpdt.so) from /usr/lib by
+            // default, but /usr/lib is a read-only filesystem at program runtime. The wrapper is
+            // embedded in this assembly; extract it into a writable directory and point the SDK
+            // there via ZrcSdk.SetLibraryPath before constructing the SDK.
             StageNativeWrapper();
 
             _sdk = new ZrcSdk();
@@ -42,20 +43,23 @@ namespace PepperDash.Essentials.Plugins
         }
 
         private const string NativeWrapperFileName = "libzrcsdkwrapperpdt.so";
-        private const string NativeWrapperTargetPath = "/usr/lib/libzrcsdkwrapperpdt.so";
 
         /// <summary>
-        /// Extracts the native ZRC SDK wrapper embedded in this assembly into <c>/usr/lib</c>, where
-        /// the SDK's <c>DllImportResolver</c> expects it. Essentials' plugin loader deletes the .cplz
-        /// and its unzip temp dir after moving only the managed .dll into <c>loadedAssemblies</c>, so
-        /// the wrapper must travel inside the assembly as an embedded resource. No-op if an up-to-date
-        /// copy is already present.
+        /// Extracts the native ZRC SDK wrapper embedded in this assembly into a writable directory
+        /// next to the plugin and points the SDK at it via <see cref="ZrcSdk.SetLibraryPath"/>.
+        /// Essentials' plugin loader deletes the .cplz and its unzip temp dir after moving only the
+        /// managed .dll into <c>loadedAssemblies</c>, so the wrapper must travel inside the assembly
+        /// as an embedded resource. The SDK loads it via <c>memfd_create</c>/<c>dlopen</c>, so a
+        /// <c>noexec</c> writable path is fine. No-op if an up-to-date copy is already present.
         /// </summary>
         private void StageNativeWrapper()
         {
             try
             {
                 var assembly = Assembly.GetExecutingAssembly();
+                var targetDir = Path.GetDirectoryName(assembly.Location) ?? "/user";
+                var targetPath = Path.Combine(targetDir, NativeWrapperFileName);
+
                 using var resourceStream = assembly.GetManifestResourceStream(NativeWrapperFileName);
 
                 if (resourceStream == null)
@@ -67,29 +71,32 @@ namespace PepperDash.Essentials.Plugins
                     return;
                 }
 
-                if (File.Exists(NativeWrapperTargetPath) &&
-                    new FileInfo(NativeWrapperTargetPath).Length == resourceStream.Length)
+                if (File.Exists(targetPath) &&
+                    new FileInfo(targetPath).Length == resourceStream.Length)
                 {
                     this.LogInformation(
                         "Native wrapper already staged at '{Target}' (size matches) — skipping copy.",
-                        NativeWrapperTargetPath);
+                        targetPath);
+                    ZrcSdk.SetLibraryPath(targetDir);
                     return;
                 }
 
-                using (var fileStream = File.Create(NativeWrapperTargetPath))
+                using (var fileStream = File.Create(targetPath))
                 {
                     resourceStream.CopyTo(fileStream);
                 }
 
+                ZrcSdk.SetLibraryPath(targetDir);
+
                 this.LogInformation(
-                    "Staged embedded native wrapper '{File}' -> '{Target}' ({Bytes} bytes).",
-                    NativeWrapperFileName, NativeWrapperTargetPath, resourceStream.Length);
+                    "Staged embedded native wrapper '{File}' -> '{Target}' ({Bytes} bytes); SDK library path set to '{Dir}'.",
+                    NativeWrapperFileName, targetPath, resourceStream.Length, targetDir);
             }
             catch (Exception ex)
             {
                 this.LogError(ex,
-                    "Failed to stage native wrapper into '{Target}': {Message}",
-                    NativeWrapperTargetPath, ex.Message);
+                    "Failed to stage native wrapper '{File}': {Message}",
+                    NativeWrapperFileName, ex.Message);
             }
         }
 
