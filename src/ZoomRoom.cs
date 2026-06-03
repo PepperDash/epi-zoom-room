@@ -1511,12 +1511,12 @@ namespace PepperDash.Essentials.Plugins
 
 		public void MuteVideoForParticipant(int userId)
 		{
-			this.LogWarning("MuteVideoForParticipant not supported by Zoom Room SDK");
+			_controller.MuteUserVideo(userId, true);
 		}
 
 		public void UnmuteVideoForParticipant(int userId)
 		{
-			this.LogWarning("UnmuteVideoForParticipant not supported by Zoom Room SDK");
+			_controller.MuteUserVideo(userId, false);
 		}
 
 		public void ToggleVideoForParticipant(int userId)
