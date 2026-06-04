@@ -1583,6 +1583,29 @@ namespace PepperDash.Essentials.Plugins
             _controller.AdmitUserFromWaitingRoom(userId);
         }
 
+        /// <summary>
+        /// Console/test helper: logs the current participants and their userIds so per-participant
+        /// commands (MuteVideoForParticipant, MuteAudioForParticipant, PinUser, etc.) can be exercised
+        /// via devjson. Call with: devjson {"deviceKey":"...","methodName":"LogParticipants","params":[]}
+        /// </summary>
+        public void LogParticipants()
+        {
+            var list = Participants.CurrentParticipants;
+            if (list == null || list.Count == 0)
+            {
+                this.LogInformation("Participants: (none — not in a meeting or list not yet populated)");
+                return;
+            }
+
+            this.LogInformation("Participants ({Count}):", list.Count);
+            foreach (var p in list)
+            {
+                this.LogInformation(
+                    "  userId={UserId} name=\"{Name}\" host={IsHost} self={IsMyself} audioMuted={AudioMuted} videoMuted={VideoMuted} handRaised={HandRaised}",
+                    p.UserId, p.Name, p.IsHost, p.IsMyself, p.AudioMuteFb, p.VideoMuteFb, p.HandIsRaisedFb);
+            }
+        }
+
 		#endregion
 
 		#region IHasParticipantAudioMute Members
