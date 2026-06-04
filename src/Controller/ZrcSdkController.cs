@@ -253,34 +253,52 @@ namespace PepperDash.Essentials.Plugins
         public bool CancelWaitingForHost()                  => _sdk.CancelWaitingForHost();
         public bool LockMeeting(bool locked)                => _sdk.LockMeeting(locked);
 
+        // ── SDK call result logging ─────────────────────────────────────────────
+        // The SDK returns a ZRCSDKError (0 = success) or a bool; ZoomRoom otherwise discards it.
+        // Log non-zero / failed results at Warning so SDK rejections (wrong meeting state, feature
+        // not available, etc.) are visible during remote testing — a console "method called" only
+        // means the C# call didn't throw, not that the SDK acted. Successes log at Debug.
+        private int Rc(string op, int code)
+        {
+            if (code != 0) this.LogWarning("SDK call {Op} returned error code {Code}", op, code);
+            else this.LogDebug("SDK call {Op} ok", op);
+            return code;
+        }
+        private bool Rc(string op, bool ok)
+        {
+            if (!ok) this.LogWarning("SDK call {Op} returned failure", op);
+            else this.LogDebug("SDK call {Op} ok", op);
+            return ok;
+        }
+
         // ── Audio ─────────────────────────────────────────────────────────────
 
         public bool SetAudioMute(bool mute)                    => _sdk.SetAudioMute(mute);
-        public bool MuteUserAudio(int userId, bool mute)       => _sdk.MuteUserAudio(userId, mute);
-        public bool MuteAllAudio(bool mute)                    => _sdk.MuteAllAudio(mute);
+        public bool MuteUserAudio(int userId, bool mute)       => Rc(nameof(MuteUserAudio), _sdk.MuteUserAudio(userId, mute));
+        public bool MuteAllAudio(bool mute)                    => Rc(nameof(MuteAllAudio), _sdk.MuteAllAudio(mute));
         public bool SetMuteOnEntry(bool mute)                  => _sdk.SetMuteOnEntry(mute);
         public bool AnswerUnmuteRequest(bool accepted)         => _sdk.AnswerUnmuteRequest(accepted);
         public bool AllowAttendeesUnmute(bool allow)           => _sdk.AllowAttendeesUnmute(allow);
-        public bool SetSpeakerVolume(float volume)             => _sdk.SetSpeakerVolume(volume);
+        public bool SetSpeakerVolume(float volume)             => Rc(nameof(SetSpeakerVolume), _sdk.SetSpeakerVolume(volume));
         public float GetSpeakerVolume()                        => _sdk.GetSpeakerVolume(out var v) ? v : -1f;
 
         // ── Video ─────────────────────────────────────────────────────────────
 
         public bool SetVideoState(bool start)                  => _sdk.SetVideoState(start);
-        public bool MuteUserVideo(int userId, bool mute)       => _sdk.MuteUserVideo(userId, mute);
-        public bool PinUserOnScreen(int userId, int screenIndex = 0)    => _sdk.PinUserOnScreen(userId, screenIndex);
-        public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => _sdk.UnpinUserFromScreen(userId, screenIndex);
-        public bool ControlUserCamera(int userId, int action, int type) => _sdk.ControlUserCamera(userId, action, type);
+        public bool MuteUserVideo(int userId, bool mute)       => Rc(nameof(MuteUserVideo), _sdk.MuteUserVideo(userId, mute));
+        public bool PinUserOnScreen(int userId, int screenIndex = 0)    => Rc(nameof(PinUserOnScreen), _sdk.PinUserOnScreen(userId, screenIndex));
+        public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => Rc(nameof(UnpinUserFromScreen), _sdk.UnpinUserFromScreen(userId, screenIndex));
+        public bool ControlUserCamera(int userId, int action, int type) => Rc(nameof(ControlUserCamera), _sdk.ControlUserCamera(userId, action, type));
 
         // ── Layout ────────────────────────────────────────────────────────────
 
-        public int SetScreenLayout(int screen, int layoutSourceType) => _sdk.SetScreenLayout(screen, layoutSourceType);
-        public int SetVideoOrder(int videoOrderType)                 => _sdk.SetVideoOrder(videoOrderType);
-        public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => _sdk.UpdateVideoLayoutStyle(videoLayoutStyle);
-        public int ControlVideoPosition(int position, int size)      => _sdk.ControlVideoPosition(position, size);
-        public int TurnVideoPage(bool forward, int pageVideoType)    => _sdk.TurnVideoPage(forward, pageVideoType);
-        public int ChangeThumbnailsPosition(int type)                => _sdk.ChangeThumbnailsPosition(type);
-        public int SwitchToFloatingShareForSingleScreen(bool floatingShare) => _sdk.SwitchToFloatingShareForSingleScreen(floatingShare);
+        public int SetScreenLayout(int screen, int layoutSourceType) => Rc(nameof(SetScreenLayout), _sdk.SetScreenLayout(screen, layoutSourceType));
+        public int SetVideoOrder(int videoOrderType)                 => Rc(nameof(SetVideoOrder), _sdk.SetVideoOrder(videoOrderType));
+        public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => Rc(nameof(UpdateVideoLayoutStyle), _sdk.UpdateVideoLayoutStyle(videoLayoutStyle));
+        public int ControlVideoPosition(int position, int size)      => Rc(nameof(ControlVideoPosition), _sdk.ControlVideoPosition(position, size));
+        public int TurnVideoPage(bool forward, int pageVideoType)    => Rc(nameof(TurnVideoPage), _sdk.TurnVideoPage(forward, pageVideoType));
+        public int ChangeThumbnailsPosition(int type)                => Rc(nameof(ChangeThumbnailsPosition), _sdk.ChangeThumbnailsPosition(type));
+        public int SwitchToFloatingShareForSingleScreen(bool floatingShare) => Rc(nameof(SwitchToFloatingShareForSingleScreen), _sdk.SwitchToFloatingShareForSingleScreen(floatingShare));
 
         // ── Recording ─────────────────────────────────────────────────────────
 
@@ -297,11 +315,11 @@ namespace PepperDash.Essentials.Plugins
 
         // ── Share ─────────────────────────────────────────────────────────────
 
-        public bool StopShare() => _sdk.StopShare();
-        public bool LaunchSharingMeeting(bool isInLocalShare, int displayState) => _sdk.LaunchSharingMeeting(isInLocalShare, displayState);
-        public bool SwitchFromLocalPresentationToNormalMeeting()                => _sdk.SwitchFromLocalPresentationToNormalMeeting();
-        public bool ShowSharingInstruction(bool show, int instructionState)     => _sdk.ShowSharingInstruction(show, instructionState);
-        public bool ShareBlackMagic(bool isStart, bool isViewLocally)           => _sdk.ShareBlackMagic(isStart, isViewLocally);
+        public bool StopShare() => Rc(nameof(StopShare), _sdk.StopShare());
+        public bool LaunchSharingMeeting(bool isInLocalShare, int displayState) => Rc(nameof(LaunchSharingMeeting), _sdk.LaunchSharingMeeting(isInLocalShare, displayState));
+        public bool SwitchFromLocalPresentationToNormalMeeting()                => Rc(nameof(SwitchFromLocalPresentationToNormalMeeting), _sdk.SwitchFromLocalPresentationToNormalMeeting());
+        public bool ShowSharingInstruction(bool show, int instructionState)     => Rc(nameof(ShowSharingInstruction), _sdk.ShowSharingInstruction(show, instructionState));
+        public bool ShareBlackMagic(bool isStart, bool isViewLocally)           => Rc(nameof(ShareBlackMagic), _sdk.ShareBlackMagic(isStart, isViewLocally));
 
         // ── Waiting room ──────────────────────────────────────────────────────
 
