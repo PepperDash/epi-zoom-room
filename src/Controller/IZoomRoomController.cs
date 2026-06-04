@@ -143,6 +143,12 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Sends DTMF digits to an active SIP call (empty callId targets the single active call).</summary>
         bool SendDtmfToSipCall(string dtmf, string callId);
 
+        /// <summary>
+        /// Dials out a PSTN phone number into the current meeting. <paramref name="cancelCall"/> cancels an
+        /// in-progress call-out; <paramref name="hasVoicePrompt"/> rings the call on the Zoom Room.
+        /// </summary>
+        bool CallOutPstnUser(string phoneNumber, bool cancelCall, bool hasVoicePrompt);
+
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
         bool IsZrcsEnabled();

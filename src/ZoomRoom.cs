@@ -63,6 +63,10 @@ namespace PepperDash.Essentials.Plugins
         private bool _sdkSpeakerMuted;
 
         private readonly object _participantLock = new object();
+        // Raw SDK participant info keyed by userID, kept in sync with Participants.CurrentParticipants.
+        // Carries the far-end camera-control flags the Essentials Participant type does not, so
+        // UpdateFarEndCameras() can discover which participants expose controllable cameras.
+        private readonly Dictionary<int, ParticipantInfo> _participantInfoByUserId = new Dictionary<int, ParticipantInfo>();
 
         private IHasCameraControls _selectedCamera;
         private CodecDirectory _currentDirectoryResult;
@@ -768,7 +772,9 @@ namespace PepperDash.Essentials.Plugins
             lock (_participantLock)
             {
                 Participants.CurrentParticipants = MapParticipants(e.Participants);
+                TrackParticipantInfo(e.Participants, fullReplace: true, isLeave: false);
             }
+            UpdateFarEndCameras();
         }
 
         private void OnControllerUserJoined(object sender, ParticipantListEventArgs e)
@@ -792,8 +798,10 @@ namespace PepperDash.Essentials.Plugins
                         }
                     }
                 }
+                TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
             }
             Participants.OnParticipantsChanged();
+            UpdateFarEndCameras();
         }
 
         private void OnControllerUserLeft(object sender, ParticipantListEventArgs e)
@@ -814,8 +822,11 @@ namespace PepperDash.Essentials.Plugins
                             Participants.CurrentParticipants.Remove(existing);
                     }
                 }
+                // On a clean-up event e.Participants is the remaining full roster; otherwise it lists who left.
+                TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: !e.NeedCleanUp);
             }
             Participants.OnParticipantsChanged();
+            UpdateFarEndCameras();
         }
 
         private void OnControllerUserUpdated(object sender, ParticipantListEventArgs e)
@@ -842,8 +853,10 @@ namespace PepperDash.Essentials.Plugins
                         }
                     }
                 }
+                TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
             }
             Participants.OnParticipantsChanged();
+            UpdateFarEndCameras();
         }
 
         private void OnControllerHostChanged(object sender, SdkEventArgs e)
@@ -1519,14 +1532,73 @@ namespace PepperDash.Essentials.Plugins
 		}
 
 		/// <summary>
-		/// Dynamically creates far end cameras for call participants who have far end control enabled.
+		/// Keeps <see cref="_participantInfoByUserId"/> in sync with the SDK participant events.
+		/// Mirrors the maintenance applied to <c>Participants.CurrentParticipants</c> so far-end
+		/// camera discovery can read the raw camera-control flags. Caller must hold <c>_participantLock</c>.
+		/// </summary>
+		private void TrackParticipantInfo(ParticipantInfo[] participants, bool fullReplace, bool isLeave)
+		{
+			if (fullReplace)
+			{
+				_participantInfoByUserId.Clear();
+				foreach (var info in participants)
+					_participantInfoByUserId[info.UserID] = info;
+			}
+			else if (isLeave)
+			{
+				foreach (var info in participants)
+					_participantInfoByUserId.Remove(info.UserID);
+			}
+			else
+			{
+				foreach (var info in participants)
+					_participantInfoByUserId[info.UserID] = info;
+			}
+		}
+
+		/// <summary>
+		/// Dynamically creates and removes <see cref="ZoomRoomFarEndCamera"/> instances for the
+		/// remote participants whose camera the room is allowed to control. Control of an existing
+		/// far-end camera is wired via <see cref="ControlFarEndCamera"/>; this reconciles the
+		/// <c>Cameras</c> list against the current participant roster (driven by the SDK participant
+		/// events). A participant is considered controllable when it is not the room itself and the
+		/// SDK reports it can be requested for control (or the room is already controlling it).
 		/// </summary>
 		private void UpdateFarEndCameras()
 		{
-			// TODO: set up far end cameras for the current call.
-			// Control of an existing far-end camera is wired via ControlFarEndCamera(); this method
-			// is the remaining piece — discovering which participants expose far-end camera control
-			// and creating ZoomRoomFarEndCamera instances for them.
+			lock (_participantLock)
+			{
+				var controllable = _participantInfoByUserId.Values
+					.Where(info => !info.IsMySelf && (info.CameraCanRequestControl || info.CameraAmIControlling))
+					.ToList();
+				var controllableIds = new HashSet<int>(controllable.Select(info => info.UserID));
+
+				// Add a camera for each newly-controllable participant.
+				foreach (var info in controllable)
+				{
+					if (Cameras.OfType<ZoomRoomFarEndCamera>().Any(c => c.Id == info.UserID))
+						continue;
+
+					var key = string.Format("{0}-farEndCamera-{1}", Key, info.UserID);
+					var name = string.IsNullOrEmpty(info.UserName)
+						? string.Format("Far End Camera {0}", info.UserID)
+						: info.UserName;
+					Cameras.Add(new ZoomRoomFarEndCamera(key, name, this, info.UserID));
+					this.LogDebug("Added far-end camera userId={UserId} name=\"{Name}\"", info.UserID, name);
+				}
+
+				// Remove cameras for participants who left or lost camera-control capability.
+				var stale = Cameras.OfType<ZoomRoomFarEndCamera>()
+					.Where(c => !(c.Id.HasValue && controllableIds.Contains(c.Id.Value)))
+					.ToList();
+				foreach (var cam in stale)
+				{
+					if (ReferenceEquals(SelectedCamera, cam))
+						SelectedCamera = null;
+					Cameras.Remove(cam);
+					this.LogDebug("Removed far-end camera userId={UserId}", cam.Id);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1947,10 +2019,12 @@ namespace PepperDash.Essentials.Plugins
 
 		public void DialPhoneCall(string number)
 		{
-			// SIP is the default transport; PSTN call-out is selectable via config but not yet implemented.
+			// SIP is the default transport; PSTN call-out adds the number to the CURRENT meeting
+			// (the SDK's third-party-meeting helper has no standalone dial-out), so it only does
+			// something when the room is already in a meeting.
 			if (_props != null && _props.PhoneDialMode == ePhoneDialMode.Pstn)
 			{
-				this.LogWarning("DialPhoneCall: PSTN dial mode is not yet implemented — set phoneDialMode to 'sip'");
+				_controller.CallOutPstnUser(number, false, false);
 				return;
 			}
 			_controller.CallSip(number);

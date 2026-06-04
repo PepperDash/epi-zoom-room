@@ -176,6 +176,7 @@ public class ControllerAbstractionTests
     [InlineData("TerminateSipCall")]
     [InlineData("CallSip")]
     [InlineData("SendDtmfToSipCall")]
+    [InlineData("CallOutPstnUser")]
     public void IZoomRoomController_Has_Phone_Method(string methodName)
     {
         ControllerInterfaceType
