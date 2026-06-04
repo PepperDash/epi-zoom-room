@@ -215,7 +215,9 @@ namespace PepperDash.Essentials.Plugins
 
 		protected Func<bool> SelfViewIsOnFeedbackFunc
 		{
-			get { return () => false; } // Self-view not supported by Zoom Room SDK
+			// Self-view is "on" whenever the PiP size is not Off.
+			get { return () => _currentSelfviewPipSize != null
+				&& !"Off".Equals(_currentSelfviewPipSize.Command, StringComparison.OrdinalIgnoreCase); }
 		}
 
 		protected Func<bool> CameraIsOffFeedbackFunc
@@ -311,11 +313,22 @@ namespace PepperDash.Essentials.Plugins
 
 		public BoolFeedback SelfviewIsOnFeedback { get; private set; }
 
-		public void GetSelfViewMode() { this.LogWarning("SelfView not supported by Zoom Room SDK"); }
+		public void GetSelfViewMode() { SelfviewIsOnFeedback.FireUpdate(); }
 
-		public void SelfViewModeOn() { this.LogWarning("SelfView not supported by Zoom Room SDK"); }
+		public void SelfViewModeOn()
+		{
+			// Restore the last visible PiP size (default Size1); a non-Off size shows the self-view.
+			var size = _lastVisibleSelfviewPipSize
+				?? SelfviewPipSizes.FirstOrDefault(s => s.Command.Equals("Size1", StringComparison.OrdinalIgnoreCase))
+				?? SelfviewPipSizes.FirstOrDefault(s => !s.Command.Equals("Off", StringComparison.OrdinalIgnoreCase));
+			if (size != null) SelfviewPipSizeSet(size);
+		}
 
-		public void SelfViewModeOff() { this.LogWarning("SelfView not supported by Zoom Room SDK"); }
+		public void SelfViewModeOff()
+		{
+			var off = SelfviewPipSizes.FirstOrDefault(s => s.Command.Equals("Off", StringComparison.OrdinalIgnoreCase));
+			if (off != null) SelfviewPipSizeSet(off);
+		}
 
 		public void SelfViewModeToggle()
 		{
@@ -851,7 +864,10 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>
         /// Starts sharing HDMI source
         /// </summary>
-		public override void StartSharing() { this.LogWarning("StartSharing not supported by Zoom Room SDK"); }
+		// HDMI-source sharing maps to IMeetingShareHelper::ShareBlackMagic(true, ...), not yet exposed by
+		// the wrapper (next batch). ShowSharingInstruction (overlay only) and LaunchSharingMeeting (used by
+		// StartSharingOnlyMeeting) are different actions, so neither is used here.
+		public override void StartSharing() { this.LogWarning("StartSharing not yet wired (pending ShareBlackMagic wrapper)"); }
 
 		/// <summary>
 		/// Stops sharing the current presentation
@@ -1692,7 +1708,48 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SelfviewPipPositionSet(CodecCommandWithLabel position)
 		{
-			this.LogWarning("SelfviewPipPositionSet not supported by Zoom Room SDK");
+			if (position == null) return;
+			_currentSelfviewPipPosition = position;
+			// ControlVideoPosition sets position AND size together, so supply the current size.
+			_controller.ControlVideoPosition(SelfviewPositionToSdk(position.Command), CurrentSelfviewSizeSdk());
+			SelfviewPipPositionFeedback.FireUpdate();
+		}
+
+		// Maps the plugin's self-view PiP position command -> ZRC SDK VideoThumbPosition int.
+		private static int SelfviewPositionToSdk(string command)
+		{
+			switch ((command ?? string.Empty).ToLower())
+			{
+				case "upleft":    return 7; // VideoThumbPositionUpLeft
+				case "upright":   return 3; // VideoThumbPositionUpRight
+				case "downright": return 5; // VideoThumbPositionDownRight
+				case "downleft":  return 8; // VideoThumbPositionDownLeft
+				default:          return 3; // default UpRight
+			}
+		}
+
+		// Maps the plugin's self-view PiP size command -> ZRC SDK VideoThumbSize int.
+		private static int SelfviewSizeToSdk(string command)
+		{
+			switch ((command ?? string.Empty).ToLower())
+			{
+				case "off":   return 0; // VideoThumbSizeOff (hides the PiP)
+				case "size1": return 1; // VideoThumbSize1x
+				case "size2": return 2; // VideoThumbSize2x
+				case "size3": return 3; // VideoThumbSize3x
+				case "strip": return 4; // VideoThumbSizeVideoStripe
+				default:      return 1; // default 1x
+			}
+		}
+
+		private int CurrentSelfviewSizeSdk()
+		{
+			return _currentSelfviewPipSize != null ? SelfviewSizeToSdk(_currentSelfviewPipSize.Command) : 1;
+		}
+
+		private int CurrentSelfviewPositionSdk()
+		{
+			return _currentSelfviewPipPosition != null ? SelfviewPositionToSdk(_currentSelfviewPipPosition.Command) : 3;
 		}
 
 		public void SelfviewPipPositionToggle()
@@ -1732,11 +1789,21 @@ namespace PepperDash.Essentials.Plugins
 
 		private CodecCommandWithLabel _currentSelfviewPipSize;
 
+		// Last non-Off size, so SelfViewModeOn can restore the size the user last chose.
+		private CodecCommandWithLabel _lastVisibleSelfviewPipSize;
+
 		public StringFeedback SelfviewPipSizeFeedback { get; private set; }
 
 		public void SelfviewPipSizeSet(CodecCommandWithLabel size)
 		{
-			this.LogWarning("SelfviewPipSizeSet not supported by Zoom Room SDK");
+			if (size == null) return;
+			_currentSelfviewPipSize = size;
+			if (!"Off".Equals(size.Command, StringComparison.OrdinalIgnoreCase))
+				_lastVisibleSelfviewPipSize = size;
+			// ControlVideoPosition sets size AND position together, so supply the current position.
+			_controller.ControlVideoPosition(CurrentSelfviewPositionSdk(), SelfviewSizeToSdk(size.Command));
+			SelfviewPipSizeFeedback.FireUpdate();
+			SelfviewIsOnFeedback.FireUpdate(); // Off vs non-Off changes the self-view-on state
 		}
 
 		public void SelfviewPipSizeToggle()
@@ -1934,17 +2001,24 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SwapContentWithThumbnail()
 		{
-			this.LogWarning("SwapContentWithThumbnail not supported by Zoom Room SDK");
+			// Correct SDK call is IMeetingViewLayoutHelper::SwitchToFloatingShareForSingleScreen(bool),
+			// which is not yet exposed by the wrapper (next batch). ChangeThumbnailsPosition only moves
+			// the thumbnail strip, so it is intentionally not used here.
+			this.LogWarning("SwapContentWithThumbnail not yet wired (pending SwitchToFloatingShareForSingleScreen wrapper)");
 		}
+
+		// PageVideoType: GalleryView=0, ThumbnailView=1, DynamicLayoutView=2. Paging is a gallery concept,
+		// so default to GalleryView; precise per-view paging would need the VideoPageStatus notification.
+		private const int PageVideoTypeGalleryView = 0;
 
 		public void LayoutTurnNextPage()
 		{
-			this.LogWarning("LayoutTurnNextPage not supported by Zoom Room SDK");
+			_controller.TurnVideoPage(true, PageVideoTypeGalleryView);
 		}
 
 		public void LayoutTurnPreviousPage()
 		{
-			this.LogWarning("LayoutTurnPreviousPage not supported by Zoom Room SDK");
+			_controller.TurnVideoPage(false, PageVideoTypeGalleryView);
 		}
 
 		#endregion
@@ -2118,12 +2192,27 @@ namespace PepperDash.Essentials.Plugins
 
 	    public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration, string password)
 	    {
-            this.LogWarning("StartSharingOnlyMeeting not supported by Zoom Room SDK");
+            // The SDK launches a sharing-only ("local presentation") meeting with the chosen instruction
+            // overlay. duration/password have no equivalent on LaunchSharingMeeting and are not used.
+            if (duration != 0 || !string.IsNullOrEmpty(password))
+                this.LogDebug("StartSharingOnlyMeeting: duration/password are not supported by the SDK and are ignored");
+            _controller.LaunchSharingMeeting(true, SharingModeToSdk(displayMode));
 	    }
 
 	    public void StartNormalMeetingFromSharingOnlyMeeting()
 	    {
-            this.LogWarning("StartNormalMeetingFromSharingOnlyMeeting not supported by Zoom Room SDK");
+            _controller.SwitchFromLocalPresentationToNormalMeeting();
+	    }
+
+	    // Maps Essentials eSharingMeetingMode -> ZRC SDK SharingInstructionDisplayState int.
+	    private static int SharingModeToSdk(eSharingMeetingMode mode)
+	    {
+	        switch (mode)
+	        {
+	            case eSharingMeetingMode.Laptop: return 1; // SharingInstructionDisplayStateDesktop
+	            case eSharingMeetingMode.Ios:    return 2; // SharingInstructionDisplayStateIOS
+	            default:                         return 0; // None
+	        }
 	    }
 
 	    #endregion

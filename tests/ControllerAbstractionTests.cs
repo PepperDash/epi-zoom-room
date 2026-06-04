@@ -106,6 +106,7 @@ public class ControllerAbstractionTests
     [InlineData("PinUserOnScreen")]
     [InlineData("UnpinUserFromScreen")]
     [InlineData("ControlUserCamera")]
+    [InlineData("ControlVideoPosition")]
     public void IZoomRoomController_Has_Video_Method(string methodName)
     {
         ControllerInterfaceType
@@ -118,12 +119,27 @@ public class ControllerAbstractionTests
     [InlineData("SetScreenLayout")]
     [InlineData("SetVideoOrder")]
     [InlineData("UpdateVideoLayoutStyle")]
+    [InlineData("TurnVideoPage")]
+    [InlineData("ChangeThumbnailsPosition")]
     public void IZoomRoomController_Has_Layout_Method(string methodName)
     {
         ControllerInterfaceType
             .GetMethods()
             .Should().Contain(m => m.Name == methodName,
                 $"IZoomRoomController must expose '{methodName}' for layout control");
+    }
+
+    [Theory]
+    [InlineData("StopShare")]
+    [InlineData("LaunchSharingMeeting")]
+    [InlineData("SwitchFromLocalPresentationToNormalMeeting")]
+    [InlineData("ShowSharingInstruction")]
+    public void IZoomRoomController_Has_Share_Method(string methodName)
+    {
+        ControllerInterfaceType
+            .GetMethods()
+            .Should().Contain(m => m.Name == methodName,
+                $"IZoomRoomController must expose '{methodName}' for share control");
     }
 
     [Theory]

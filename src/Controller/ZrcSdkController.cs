@@ -273,6 +273,9 @@ namespace PepperDash.Essentials.Plugins
         public int SetScreenLayout(int screen, int layoutSourceType) => _sdk.SetScreenLayout(screen, layoutSourceType);
         public int SetVideoOrder(int videoOrderType)                 => _sdk.SetVideoOrder(videoOrderType);
         public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => _sdk.UpdateVideoLayoutStyle(videoLayoutStyle);
+        public int ControlVideoPosition(int position, int size)      => _sdk.ControlVideoPosition(position, size);
+        public int TurnVideoPage(bool forward, int pageVideoType)    => _sdk.TurnVideoPage(forward, pageVideoType);
+        public int ChangeThumbnailsPosition(int type)                => _sdk.ChangeThumbnailsPosition(type);
 
         // ── Recording ─────────────────────────────────────────────────────────
 
@@ -290,6 +293,9 @@ namespace PepperDash.Essentials.Plugins
         // ── Share ─────────────────────────────────────────────────────────────
 
         public bool StopShare() => _sdk.StopShare();
+        public bool LaunchSharingMeeting(bool isInLocalShare, int displayState) => _sdk.LaunchSharingMeeting(isInLocalShare, displayState);
+        public bool SwitchFromLocalPresentationToNormalMeeting()                => _sdk.SwitchFromLocalPresentationToNormalMeeting();
+        public bool ShowSharingInstruction(bool show, int instructionState)     => _sdk.ShowSharingInstruction(show, instructionState);
 
         // ── Waiting room ──────────────────────────────────────────────────────
 

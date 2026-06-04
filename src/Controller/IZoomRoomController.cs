@@ -81,6 +81,15 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Sets the meeting video layout style (VideoLayoutStyle: Gallery=1, Speaker=2, Thumbnail=3, ContentOnly=4, DynamicLayout=6). Distinct from SetVideoOrder, which only reorders tiles.</summary>
         int UpdateVideoLayoutStyle(int videoLayoutStyle);
 
+        /// <summary>Sets the self-view PiP position and size. position = VideoThumbPosition, size = VideoThumbSize (Off=0 hides the PiP).</summary>
+        int ControlVideoPosition(int position, int size);
+
+        /// <summary>Pages the gallery/thumbnail/dynamic video view. pageVideoType = PageVideoType (GalleryView=0, ThumbnailView=1, DynamicLayoutView=2).</summary>
+        int TurnVideoPage(bool forward, int pageVideoType);
+
+        /// <summary>Changes the thumbnail strip position (content/thumbnail swap). type = ThumbnailsPositionType.</summary>
+        int ChangeThumbnailsPosition(int type);
+
         // ── Recording ─────────────────────────────────────────────────────────
 
         bool StartRecording();
@@ -96,6 +105,15 @@ namespace PepperDash.Essentials.Plugins
         // ── Share ─────────────────────────────────────────────────────────────
 
         bool StopShare();
+
+        /// <summary>Launches a sharing-only ("local presentation") meeting. displayState = SharingInstructionDisplayState.</summary>
+        bool LaunchSharingMeeting(bool isInLocalShare, int displayState);
+
+        /// <summary>Switches an active local presentation into a normal Zoom meeting.</summary>
+        bool SwitchFromLocalPresentationToNormalMeeting();
+
+        /// <summary>Shows/hides the wireless-share instruction overlay. instructionState = SharingInstructionDisplayState.</summary>
+        bool ShowSharingInstruction(bool show, int instructionState);
 
         // ── Waiting room ──────────────────────────────────────────────────────
 
