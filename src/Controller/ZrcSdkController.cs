@@ -165,6 +165,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.ParticipantCount        += (s, e) => SafeRaise(() => ParticipantCountChanged?.Invoke(this, e));
             _sdk.HostChanged             += (s, e) => SafeRaise(() => HostChanged?.Invoke(this, e));
             _sdk.SharingStatusChanged    += (s, e) => SafeRaise(() => SharingStatusChanged?.Invoke(this, e));
+            _sdk.VideoPageStatusChanged  += (s, e) => SafeRaise(() => VideoPageStatusChanged?.Invoke(this, e));
             _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
             _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
 
@@ -276,6 +277,7 @@ namespace PepperDash.Essentials.Plugins
         public int ControlVideoPosition(int position, int size)      => _sdk.ControlVideoPosition(position, size);
         public int TurnVideoPage(bool forward, int pageVideoType)    => _sdk.TurnVideoPage(forward, pageVideoType);
         public int ChangeThumbnailsPosition(int type)                => _sdk.ChangeThumbnailsPosition(type);
+        public int SwitchToFloatingShareForSingleScreen(bool floatingShare) => _sdk.SwitchToFloatingShareForSingleScreen(floatingShare);
 
         // ── Recording ─────────────────────────────────────────────────────────
 
@@ -296,6 +298,7 @@ namespace PepperDash.Essentials.Plugins
         public bool LaunchSharingMeeting(bool isInLocalShare, int displayState) => _sdk.LaunchSharingMeeting(isInLocalShare, displayState);
         public bool SwitchFromLocalPresentationToNormalMeeting()                => _sdk.SwitchFromLocalPresentationToNormalMeeting();
         public bool ShowSharingInstruction(bool show, int instructionState)     => _sdk.ShowSharingInstruction(show, instructionState);
+        public bool ShareBlackMagic(bool isStart, bool isViewLocally)           => _sdk.ShareBlackMagic(isStart, isViewLocally);
 
         // ── Waiting room ──────────────────────────────────────────────────────
 
@@ -334,6 +337,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SdkEventArgs> ParticipantCountChanged;
         public event EventHandler<SdkEventArgs> HostChanged;
         public event EventHandler<SharingStatusEventArgs> SharingStatusChanged;
+        public event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         public event EventHandler<SIPCall> SipCallStatusChanged;
         public event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
 

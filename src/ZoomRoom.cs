@@ -52,6 +52,11 @@ namespace PepperDash.Essentials.Plugins
         private string _currentMeetingName   = string.Empty;
         private string _activeSipCallId      = string.Empty;
         private bool _meetingPasswordRequired;
+        // Layout page state, driven by the SDK's VideoPageStatus notification.
+        private bool _layoutIsOnFirstPage;
+        private bool _layoutIsOnLastPage;
+        private int  _currentPageVideoType; // PageVideoType (0 = GalleryView)
+        private bool _contentSwappedWithThumbnail;
 
         private readonly object _participantLock = new object();
 
@@ -552,6 +557,7 @@ namespace PepperDash.Essentials.Plugins
             _controller.ParticipantCountChanged  += (s, e) => Participants.OnParticipantsChanged();
             _controller.HostChanged              += OnControllerHostChanged;
             _controller.SharingStatusChanged     += OnControllerSharingStatusChanged;
+            _controller.VideoPageStatusChanged   += OnControllerVideoPageStatusChanged;
             _controller.SipCallStatusChanged     += OnControllerSipCallStatusChanged;
 
             _controller.Initialize(_props.SdkConfigPath);
@@ -826,6 +832,15 @@ namespace PepperDash.Essentials.Plugins
             ReceivingContent.FireUpdate();
         }
 
+        private void OnControllerVideoPageStatusChanged(object sender, VideoPageStatusEventArgs e)
+        {
+            _layoutIsOnFirstPage  = e.IsInFirstPage;
+            _layoutIsOnLastPage   = e.IsInLastPage;
+            _currentPageVideoType = e.PageVideoType; // keep the SDK's current page type for TurnVideoPage
+            LayoutViewIsOnFirstPageFeedback.FireUpdate();
+            LayoutViewIsOnLastPageFeedback.FireUpdate();
+        }
+
         private void OnControllerSipCallStatusChanged(object sender, SIPCall e)
         {
             _activeSipCallId = e?.CallID ?? string.Empty;
@@ -864,10 +879,10 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>
         /// Starts sharing HDMI source
         /// </summary>
-		// HDMI-source sharing maps to IMeetingShareHelper::ShareBlackMagic(true, ...), not yet exposed by
-		// the wrapper (next batch). ShowSharingInstruction (overlay only) and LaunchSharingMeeting (used by
-		// StartSharingOnlyMeeting) are different actions, so neither is used here.
-		public override void StartSharing() { this.LogWarning("StartSharing not yet wired (pending ShareBlackMagic wrapper)"); }
+		/// <summary>
+		/// Starts sharing the HDMI source (Zoom "black magic" cable share), also shown locally.
+		/// </summary>
+		public override void StartSharing() { _controller.ShareBlackMagic(true, true); }
 
 		/// <summary>
 		/// Stops sharing the current presentation
@@ -1882,12 +1897,12 @@ namespace PepperDash.Essentials.Plugins
 
 		private Func<bool> LayoutViewIsOnFirstPageFeedbackFunc
 		{
-			get { return () => Status.Layout.is_In_First_Page; }
+			get { return () => _layoutIsOnFirstPage; } // driven by the SDK VideoPageStatus notification
 		}
 
 		private Func<bool> LayoutViewIsOnLastPageFeedbackFunc
 		{
-			get { return () => Status.Layout.is_In_Last_Page; }
+			get { return () => _layoutIsOnLastPage; } // driven by the SDK VideoPageStatus notification
 		}
 
 		private Func<bool> CanSwapContentWithThumbnailFeedbackFunc
@@ -1897,7 +1912,7 @@ namespace PepperDash.Essentials.Plugins
 
 		private Func<bool> ContentSwappedWithThumbnailFeedbackFunc
 		{
-			get { return () => Configuration.Call.Layout.ShareThumb; }
+			get { return () => _contentSwappedWithThumbnail; }
 		}
 
 		public BoolFeedback LayoutViewIsOnFirstPageFeedback { get; private set; }
@@ -2001,24 +2016,21 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SwapContentWithThumbnail()
 		{
-			// Correct SDK call is IMeetingViewLayoutHelper::SwitchToFloatingShareForSingleScreen(bool),
-			// which is not yet exposed by the wrapper (next batch). ChangeThumbnailsPosition only moves
-			// the thumbnail strip, so it is intentionally not used here.
-			this.LogWarning("SwapContentWithThumbnail not yet wired (pending SwitchToFloatingShareForSingleScreen wrapper)");
+			// Toggle the single-screen floating-share state (content <-> video primary).
+			_contentSwappedWithThumbnail = !_contentSwappedWithThumbnail;
+			_controller.SwitchToFloatingShareForSingleScreen(_contentSwappedWithThumbnail);
+			ContentSwappedWithThumbnailFeedback.FireUpdate();
 		}
-
-		// PageVideoType: GalleryView=0, ThumbnailView=1, DynamicLayoutView=2. Paging is a gallery concept,
-		// so default to GalleryView; precise per-view paging would need the VideoPageStatus notification.
-		private const int PageVideoTypeGalleryView = 0;
 
 		public void LayoutTurnNextPage()
 		{
-			_controller.TurnVideoPage(true, PageVideoTypeGalleryView);
+			// _currentPageVideoType is kept in sync by the SDK VideoPageStatus notification.
+			_controller.TurnVideoPage(true, _currentPageVideoType);
 		}
 
 		public void LayoutTurnPreviousPage()
 		{
-			_controller.TurnVideoPage(false, PageVideoTypeGalleryView);
+			_controller.TurnVideoPage(false, _currentPageVideoType);
 		}
 
 		#endregion

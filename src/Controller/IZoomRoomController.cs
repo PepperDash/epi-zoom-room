@@ -87,8 +87,11 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Pages the gallery/thumbnail/dynamic video view. pageVideoType = PageVideoType (GalleryView=0, ThumbnailView=1, DynamicLayoutView=2).</summary>
         int TurnVideoPage(bool forward, int pageVideoType);
 
-        /// <summary>Changes the thumbnail strip position (content/thumbnail swap). type = ThumbnailsPositionType.</summary>
+        /// <summary>Changes the thumbnail strip position (top/bottom). type = ThumbnailsPositionType.</summary>
         int ChangeThumbnailsPosition(int type);
+
+        /// <summary>Swaps shared content with the participant video on a single screen. floatingShare = float the share (video full-screen).</summary>
+        int SwitchToFloatingShareForSingleScreen(bool floatingShare);
 
         // ── Recording ─────────────────────────────────────────────────────────
 
@@ -114,6 +117,9 @@ namespace PepperDash.Essentials.Plugins
 
         /// <summary>Shows/hides the wireless-share instruction overlay. instructionState = SharingInstructionDisplayState.</summary>
         bool ShowSharingInstruction(bool show, int instructionState);
+
+        /// <summary>Starts/stops an HDMI ("black magic") cable share. isViewLocally = also show the source locally.</summary>
+        bool ShareBlackMagic(bool isStart, bool isViewLocally);
 
         // ── Waiting room ──────────────────────────────────────────────────────
 
@@ -152,6 +158,7 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<SdkEventArgs> ParticipantCountChanged;
         event EventHandler<SdkEventArgs> HostChanged;
         event EventHandler<SharingStatusEventArgs> SharingStatusChanged;
+        event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         event EventHandler<SIPCall> SipCallStatusChanged;
         event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
     }

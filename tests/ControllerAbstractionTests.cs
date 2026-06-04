@@ -121,6 +121,7 @@ public class ControllerAbstractionTests
     [InlineData("UpdateVideoLayoutStyle")]
     [InlineData("TurnVideoPage")]
     [InlineData("ChangeThumbnailsPosition")]
+    [InlineData("SwitchToFloatingShareForSingleScreen")]
     public void IZoomRoomController_Has_Layout_Method(string methodName)
     {
         ControllerInterfaceType
@@ -134,6 +135,7 @@ public class ControllerAbstractionTests
     [InlineData("LaunchSharingMeeting")]
     [InlineData("SwitchFromLocalPresentationToNormalMeeting")]
     [InlineData("ShowSharingInstruction")]
+    [InlineData("ShareBlackMagic")]
     public void IZoomRoomController_Has_Share_Method(string methodName)
     {
         ControllerInterfaceType
@@ -255,6 +257,15 @@ public class ControllerAbstractionTests
             .GetEvents()
             .Should().Contain(e => e.Name == "SharingStatusChanged",
                 "IZoomRoomController must expose SharingStatusChanged for share-state bridge feedback");
+    }
+
+    [Fact]
+    public void IZoomRoomController_Has_VideoPageStatusChanged_Event()
+    {
+        ControllerInterfaceType
+            .GetEvents()
+            .Should().Contain(e => e.Name == "VideoPageStatusChanged",
+                "IZoomRoomController must expose VideoPageStatusChanged for layout first/last-page feedback");
     }
 
     // ── Password caching API ──────────────────────────────────────────────────
