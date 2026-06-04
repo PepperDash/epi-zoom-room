@@ -110,6 +110,9 @@ public class ControllerAbstractionTests
     [InlineData("ControlUserCamera")]
     [InlineData("ControlCamera")]
     [InlineData("ChangeSmartCameraMode")]
+    [InlineData("GetCameras")]
+    [InlineData("GetCurrentCamera")]
+    [InlineData("SetCurrentCamera")]
     [InlineData("ControlVideoPosition")]
     public void IZoomRoomController_Has_Video_Method(string methodName)
     {

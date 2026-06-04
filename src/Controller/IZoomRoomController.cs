@@ -85,6 +85,15 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Sets the smart/auto camera framing mode. mask = SmartCameraMask, deviceId = "" for the main camera.</summary>
         bool ChangeSmartCameraMode(int mask, string deviceId = "");
 
+        /// <summary>Enumerates the room's local cameras (device list); empty array if none/unavailable.</summary>
+        CameraDevice[] GetCameras();
+
+        /// <summary>Gets the currently selected/active camera, or null if unavailable.</summary>
+        CameraDevice GetCurrentCamera();
+
+        /// <summary>Selects the active local camera by device ID.</summary>
+        bool SetCurrentCamera(string deviceId);
+
         // ── Layout ────────────────────────────────────────────────────────────
 
         int SetScreenLayout(int screen, int layoutSourceType);

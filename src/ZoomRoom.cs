@@ -140,6 +140,11 @@ namespace PepperDash.Essentials.Plugins
 
 			Cameras = new List<IHasCameraControls>();
 
+			// Initialized here (not in SetUpCameras, which only runs once connected) so the
+			// SelectedCamera setter never dereferences a null feedback.
+			SelectedCameraFeedback = new StringFeedback(() => _selectedCamera != null ? _selectedCamera.Key : string.Empty);
+			ControllingFarEndCameraFeedback = new BoolFeedback(() => SelectedCamera is IAmFarEndCamera);
+
 			SetUpDirectory();
 
 			Participants = new CodecParticipants();
@@ -319,7 +324,25 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SelectCamera(string key)
         {
-            this.LogWarning("SelectCamera not supported by Zoom Room SDK");
+            var camera = Cameras.FirstOrDefault(c => c.Key.Equals(key));
+            if (camera == null)
+            {
+                this.LogWarning("SelectCamera: no camera with key {Key}", key);
+                return;
+            }
+
+            // Far-end cameras are selected locally only (no SDK device switch); near-end cameras
+            // switch the room's active camera via the setting service, keyed by device ID.
+            if (camera is IAmFarEndCamera)
+            {
+                SelectedCamera = camera;
+                return;
+            }
+
+            if (_controller.SetCurrentCamera(key))
+            {
+                SelectedCamera = camera;
+            }
         }
 
 		public CameraBase FarEndCamera { get; private set; }
@@ -594,6 +617,9 @@ namespace PepperDash.Essentials.Plugins
             if (connected)
             {
                 SeedSpeakerVolume();
+
+                // Populate near-end cameras from the SDK device list (real device IDs).
+                SetUpCameras();
 
                 // Auto-download the directory/phonebook unless disabled by config. Results arrive
                 // asynchronously via ContactListChanged and populate DirectoryRoot.
@@ -1667,35 +1693,36 @@ namespace PepperDash.Essentials.Plugins
 		/// </summary>
 		private void SetUpCameras()
 		{
-			SelectedCameraFeedback = new StringFeedback(() => Configuration.Video.Camera.SelectedId);
-
-			ControllingFarEndCameraFeedback = new BoolFeedback(() => SelectedCamera is IAmFarEndCamera);
-
-			foreach (var cam in Status.Cameras)
+			// Near-end cameras come from the SDK's setting-service device list (real device IDs).
+			// There is no SDK push for camera-list/selection changes, so this is refreshed on connect
+			// and after a SelectCamera; external (Zoom UI) camera swaps won't reflect until then.
+			var devices = _controller.GetCameras();
+			if (devices == null || devices.Length == 0)
 			{
-				// Known Issue:
-				// Crestron UC engine systems seem to report an item in the cameras list that represnts the USB bridge device. 
-				// If we know the name and it's reliably consistent, we could ignore it here...
-
-				if (cam.Name.IndexOf("HD-CONV-USB") > -1)
+				this.LogInformation("No local cameras reported by the SDK");
+			}
+			else
+			{
+				foreach (var dev in devices)
 				{
-					// Skip this as it's the Crestron USB box, not a real camera
-					continue;
+					// Crestron UC engine systems report the USB bridge device in the camera list; skip it.
+					if (!string.IsNullOrEmpty(dev.Name) && dev.Name.IndexOf("HD-CONV-USB") > -1)
+						continue;
+
+					var existingCam = Cameras.FirstOrDefault((c) => c.Key.Equals(dev.Id));
+					if (existingCam == null)
+					{
+						var displayName = string.IsNullOrEmpty(dev.DisplayName) ? dev.Name : dev.DisplayName;
+						Cameras.Add(new ZoomRoomCamera(dev.Id, displayName, this));
+						this.LogDebug("Added near-end camera id=\"{Id}\" name=\"{Name}\"", dev.Id, displayName);
+					}
+
+					if (dev.IsSelected)
+					{
+						var cam = Cameras.FirstOrDefault((c) => c.Key.Equals(dev.Id));
+						if (cam != null) SelectedCamera = cam;
+					}
 				}
-
-                var existingCam = Cameras.FirstOrDefault((c) => c.Key.Equals(cam.id));
-
-                if (existingCam == null)
-                {
-                    var camera = new ZoomRoomCamera(cam.id, cam.Name, this);
-
-                    Cameras.Add(camera);
-
-                    if (cam.Selected)
-                    {
-                        SelectedCamera = camera;
-                    }
-                }
 			}
 
 			if (IsInCall)
@@ -1786,13 +1813,13 @@ namespace PepperDash.Essentials.Plugins
 		}
 
 		/// <summary>
-		/// Sends a near-end (main camera) PTZ command. Empty device ID targets the room's main camera
-		/// (the SDK's ControlLocalCamera convention).
+		/// Sends a near-end PTZ command to a specific local camera by device ID. An empty device ID
+		/// targets the room's main camera (the SDK's ControlLocalCamera convention).
 		/// </summary>
-		internal void ControlNearEndCamera(eZoomRoomCameraState state, eZoomRoomCameraAction action)
+		internal void ControlNearEndCamera(string deviceId, eZoomRoomCameraState state, eZoomRoomCameraAction action)
 		{
 			if (!TryMapCameraCommand(state, action, out var controlAction, out var controlType)) return;
-			_controller.ControlCamera(string.Empty, controlAction, controlType);
+			_controller.ControlCamera(deviceId ?? string.Empty, controlAction, controlType);
 		}
 
 		// Maps the plugin's camera enums to the ZRC SDK CameraControlAction / CameraControlType ints.
@@ -2021,20 +2048,23 @@ namespace PepperDash.Essentials.Plugins
 		#region Implementation of IHasCameraAutoMode
 
 		// SmartCameraMask: SpeakerFocus(2) = auto-framing follows the speaker; Manual(1) = no auto framing.
-		// Empty device ID targets the room's main camera.
 		private const int SmartCameraMaskManual = 1;
 		private const int SmartCameraMaskSpeakerFocus = 2;
 
+		// Smart-mode targets the selected near-end camera by device ID; empty falls back to the main camera.
+		private string SelectedNearEndCameraDeviceId =>
+			(_selectedCamera != null && !(_selectedCamera is IAmFarEndCamera)) ? _selectedCamera.Key : string.Empty;
+
 		public void CameraAutoModeOn()
 		{
-			if (!_controller.ChangeSmartCameraMode(SmartCameraMaskSpeakerFocus)) return;
+			if (!_controller.ChangeSmartCameraMode(SmartCameraMaskSpeakerFocus, SelectedNearEndCameraDeviceId)) return;
 			_cameraAutoModeOn = true;
 			CameraAutoModeIsOnFeedback.FireUpdate();
 		}
 
 		public void CameraAutoModeOff()
 		{
-			if (!_controller.ChangeSmartCameraMode(SmartCameraMaskManual)) return;
+			if (!_controller.ChangeSmartCameraMode(SmartCameraMaskManual, SelectedNearEndCameraDeviceId)) return;
 			_cameraAutoModeOn = false;
 			CameraAutoModeIsOnFeedback.FireUpdate();
 		}

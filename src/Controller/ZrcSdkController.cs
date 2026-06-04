@@ -293,6 +293,9 @@ namespace PepperDash.Essentials.Plugins
         public bool ControlUserCamera(int userId, int action, int type) => Rc(nameof(ControlUserCamera), _sdk.ControlUserCamera(userId, action, type));
         public bool ControlCamera(string deviceId, int action, int type)    => Rc(nameof(ControlCamera), _sdk.ControlCamera(deviceId, action, type));
         public bool ChangeSmartCameraMode(int mask, string deviceId = "")   => Rc(nameof(ChangeSmartCameraMode), _sdk.ChangeSmartCameraMode(mask, deviceId));
+        public CameraDevice[] GetCameras()              => _sdk.GetCameras();
+        public CameraDevice GetCurrentCamera()          => _sdk.TryGetCurrentCamera(out var cam) ? cam : null;
+        public bool SetCurrentCamera(string deviceId)   => Rc(nameof(SetCurrentCamera), _sdk.SetCurrentCamera(deviceId));
 
         // ── Layout ────────────────────────────────────────────────────────────
 

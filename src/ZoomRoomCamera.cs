@@ -63,7 +63,8 @@ namespace PepperDash.Essentials.Plugins
                 return;
             }
 
-            ParentCodec.ControlNearEndCamera(state, action);
+            // Key is this camera's SDK device ID; an empty/unknown key falls back to the main camera.
+            ParentCodec.ControlNearEndCamera(Key, state, action);
         }
 
         void StartContinueTimer()
