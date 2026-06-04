@@ -5,6 +5,14 @@ on:
     branches:
       - '**'
 
+# The org's default GITHUB_TOKEN permissions don't include packages:read, so the build's restore
+# 401s on the org GitHub Packages feed (PepperDash.ZoomRoom.Sdk + PepperDashEssentials v3 dev).
+# Grant the reusable build the scopes it needs: packages (read deps + publish the plugin) and
+# contents (create/delete releases & tags).
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   getVersion:
     uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-getversion.yml@main
