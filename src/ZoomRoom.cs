@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using Crestron.SimplSharp;
@@ -439,7 +440,7 @@ namespace PepperDash.Essentials.Plugins
 
 		public void GetSchedule()
 		{
-			this.LogWarning("Schedule/bookings not supported by Zoom Room SDK");
+			_controller.ListMeeting();
 		}
 
 		#endregion
@@ -573,6 +574,7 @@ namespace PepperDash.Essentials.Plugins
             _controller.VideoPageStatusChanged   += OnControllerVideoPageStatusChanged;
             _controller.SipCallStatusChanged     += OnControllerSipCallStatusChanged;
             _controller.ContactListChanged       += OnControllerContactListChanged;
+            _controller.MeetingListChanged       += OnControllerMeetingListChanged;
 
             _controller.Initialize(_props.SdkConfigPath);
 	    }
@@ -599,6 +601,11 @@ namespace PepperDash.Essentials.Plugins
                     this.LogInformation("Requesting directory contacts (auto-download)");
                     _controller.SubscribeContacts(0, 50, false);
                 }
+
+                // Request the current schedule/bookings. Results arrive asynchronously via
+                // MeetingListChanged and populate CodecSchedule.
+                this.LogInformation("Requesting meeting schedule (bookings)");
+                _controller.ListMeeting();
             }
             else
             {
@@ -1551,6 +1558,53 @@ namespace PepperDash.Essentials.Plugins
 			});
 
 			return contact;
+		}
+
+		// Maps the SDK schedule (bookings) into the Essentials CodecScheduleAwareness model and
+		// publishes it. The SDK delivers the full list on each update, so the meeting list is
+		// replaced wholesale rather than merged.
+		private void OnControllerMeetingListChanged(object sender, MeetingListEventArgs e)
+		{
+			if (e == null || e.Meetings == null) return;
+
+			var meetings = e.Meetings
+				.Select(MapMeeting)
+				.Where(m => m != null)
+				.ToList();
+
+			this.LogInformation("Schedule updated: {MeetingCount} meeting(s) (result {Result})",
+				meetings.Count, e.Result);
+
+			CodecSchedule.Meetings = meetings;
+		}
+
+		// Maps a single SDK meeting item to an Essentials Meeting. Returns null if start/end times
+		// cannot be parsed, since the schedule model relies on them for joinable/warning logic.
+		private Meeting MapMeeting(MeetingItemInfo item)
+		{
+			if (item == null) return null;
+
+			if (!DateTime.TryParse(item.StartTime, CultureInfo.InvariantCulture,
+					DateTimeStyles.RoundtripKind, out var startTime) ||
+				!DateTime.TryParse(item.EndTime, CultureInfo.InvariantCulture,
+					DateTimeStyles.RoundtripKind, out var endTime))
+			{
+				this.LogDebug("Skipping meeting {MeetingNumber}: unparseable start/end time ('{Start}' / '{End}')",
+					item.MeetingNumber, item.StartTime, item.EndTime);
+				return null;
+			}
+
+			return new Meeting
+			{
+				Id = item.MeetingNumber,
+				Title = item.MeetingName,
+				Organizer = item.HostName,
+				StartTime = startTime,
+				EndTime = endTime,
+				Privacy = item.IsPrivate ? eMeetingPrivacy.Private : eMeetingPrivacy.Public,
+				Dialable = !string.IsNullOrEmpty(item.MeetingNumber),
+				MinutesBeforeMeeting = CodecSchedule.MeetingWarningMinutes,
+			};
 		}
 
 		/// <summary>

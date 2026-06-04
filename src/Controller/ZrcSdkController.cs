@@ -170,6 +170,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
             _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
             _sdk.ContactListChanged      += (s, e) => SafeRaise(() => ContactListChanged?.Invoke(this, e));
+            _sdk.MeetingListChanged      += (s, e) => SafeRaise(() => MeetingListChanged?.Invoke(this, e));
 
             var effectivePath = string.IsNullOrEmpty(configPath) ? _sdkConfigPath : configPath;
             var result = _sdk.Initialize(effectivePath);
@@ -341,6 +342,10 @@ namespace PepperDash.Essentials.Plugins
         public bool InviteAttendees(string[] contactIds)                          => Rc(nameof(InviteAttendees), _sdk.InviteAttendees(contactIds));
         public bool MeetWithImUsers(string[] contactIds)                          => Rc(nameof(MeetWithImUsers), _sdk.MeetWithImUsers(contactIds));
 
+        // ── Bookings / Schedule ────────────────────────────────────────────────
+
+        public bool ListMeeting() => Rc(nameof(ListMeeting), _sdk.ListMeeting());
+
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
         public bool IsZrcsEnabled() => _sdk.IsZRCSEnabled();
@@ -373,6 +378,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SIPCall> SipCallStatusChanged;
         public event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
         public event EventHandler<ContactListEventArgs> ContactListChanged;
+        public event EventHandler<MeetingListEventArgs> MeetingListChanged;
 
         // ── IDisposable ───────────────────────────────────────────────────────
 

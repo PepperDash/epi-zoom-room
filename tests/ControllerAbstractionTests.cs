@@ -197,6 +197,15 @@ public class ControllerAbstractionTests
                 $"IZoomRoomController must expose '{methodName}' for directory/invite control");
     }
 
+    [Fact]
+    public void IZoomRoomController_Has_ListMeeting_Method()
+    {
+        ControllerInterfaceType
+            .GetMethods()
+            .Should().Contain(m => m.Name == "ListMeeting",
+                "IZoomRoomController must expose ListMeeting for bookings/schedule awareness");
+    }
+
     // ── Method return types ───────────────────────────────────────────────────
 
     [Theory]
@@ -215,6 +224,7 @@ public class ControllerAbstractionTests
     [InlineData("MuteAllAudio")]
     [InlineData("SetVideoState")]
     [InlineData("AdmitAllFromWaitingRoom")]
+    [InlineData("ListMeeting")]
     public void IZoomRoomController_CommandMethod_Returns_Bool(string methodName)
     {
         var method = ControllerInterfaceType.GetMethods()
@@ -302,6 +312,15 @@ public class ControllerAbstractionTests
             .GetEvents()
             .Should().Contain(e => e.Name == "ContactListChanged",
                 "IZoomRoomController must expose ContactListChanged for directory subscription results");
+    }
+
+    [Fact]
+    public void IZoomRoomController_Has_MeetingListChanged_Event()
+    {
+        ControllerInterfaceType
+            .GetEvents()
+            .Should().Contain(e => e.Name == "MeetingListChanged",
+                "IZoomRoomController must expose MeetingListChanged for bookings/schedule results");
     }
 
     [Fact]

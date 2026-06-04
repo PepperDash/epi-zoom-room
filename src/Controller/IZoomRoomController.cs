@@ -163,6 +163,14 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Starts a NEW meeting with the given contacts (by contact ID).</summary>
         bool MeetWithImUsers(string[] contactIds);
 
+        // ── Bookings / Schedule ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Requests the current list of scheduled meetings (calendar bookings).
+        /// Results arrive via <see cref="MeetingListChanged"/>.
+        /// </summary>
+        bool ListMeeting();
+
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
         bool IsZrcsEnabled();
@@ -195,5 +203,6 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<SIPCall> SipCallStatusChanged;
         event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
         event EventHandler<ContactListEventArgs> ContactListChanged;
+        event EventHandler<MeetingListEventArgs> MeetingListChanged;
     }
 }
