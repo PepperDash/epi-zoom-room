@@ -137,6 +137,12 @@ namespace PepperDash.Essentials.Plugins
 
         bool TerminateSipCall(string callId);
 
+        /// <summary>Places an outbound SIP call to the given URI / number.</summary>
+        bool CallSip(string uri);
+
+        /// <summary>Sends DTMF digits to an active SIP call (empty callId targets the single active call).</summary>
+        bool SendDtmfToSipCall(string dtmf, string callId);
+
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
         bool IsZrcsEnabled();

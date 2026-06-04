@@ -329,7 +329,9 @@ namespace PepperDash.Essentials.Plugins
 
         // ── SIP / Phone ───────────────────────────────────────────────────────
 
-        public bool TerminateSipCall(string callId) => _sdk.TerminateSIPCall(callId);
+        public bool TerminateSipCall(string callId)               => Rc(nameof(TerminateSipCall), _sdk.TerminateSIPCall(callId));
+        public bool CallSip(string uri)                           => Rc(nameof(CallSip), _sdk.CallSIP(uri));
+        public bool SendDtmfToSipCall(string dtmf, string callId) => Rc(nameof(SendDtmfToSipCall), _sdk.SendDTMFToSIPCall(dtmf, callId));
 
         // ── ZRCS ──────────────────────────────────────────────────────────────
 

@@ -1947,7 +1947,13 @@ namespace PepperDash.Essentials.Plugins
 
 		public void DialPhoneCall(string number)
 		{
-			this.LogWarning("DialPhoneCall not supported by Zoom Room SDK");
+			// SIP is the default transport; PSTN call-out is selectable via config but not yet implemented.
+			if (_props != null && _props.PhoneDialMode == ePhoneDialMode.Pstn)
+			{
+				this.LogWarning("DialPhoneCall: PSTN dial mode is not yet implemented — set phoneDialMode to 'sip'");
+				return;
+			}
+			_controller.CallSip(number);
 		}
 
 		public void EndPhoneCall()
@@ -1957,7 +1963,8 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SendDtmfToPhone(string digit)
 		{
-			this.LogWarning("SendDtmfToPhone not supported by Zoom Room SDK");
+			// Empty callId targets the single active SIP call.
+			_controller.SendDtmfToSipCall(digit, _activeSipCallId ?? string.Empty);
 		}
 
 		#endregion

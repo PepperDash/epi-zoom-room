@@ -39,6 +39,14 @@ namespace PepperDash.Essentials.Plugins
         public string ActivationCode { get; set; }
 
         /// <summary>
+        /// How <c>DialPhoneCall</c> places outbound calls. <c>Sip</c> (default) uses the SDK's SIP
+        /// phone service; <c>Pstn</c> uses PSTN call-out (not yet implemented).
+        /// </summary>
+        [JsonProperty("phoneDialMode")]
+        [JsonConverter(typeof(StringEnumConverter))]
+        public ePhoneDialMode PhoneDialMode { get; set; } = ePhoneDialMode.Sip;
+
+        /// <summary>
         /// Path passed to ZrcSdk.Initialize(). Defaults to /user/zrcsdk (writable, persistent volume).
         /// </summary>
         [JsonProperty("sdkConfigPath")]
@@ -46,5 +54,14 @@ namespace PepperDash.Essentials.Plugins
 
         // communicationMonitorProperties is kept for back-compat but is no longer used —
         // the SDK is event-driven and requires no polling.
+    }
+
+    /// <summary>Outbound phone dialing transport for <c>DialPhoneCall</c>.</summary>
+    public enum ePhoneDialMode
+    {
+        /// <summary>SIP phone service (default).</summary>
+        Sip,
+        /// <summary>PSTN call-out (not yet implemented).</summary>
+        Pstn,
     }
 }

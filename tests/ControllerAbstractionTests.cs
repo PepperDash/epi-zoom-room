@@ -172,6 +172,18 @@ public class ControllerAbstractionTests
                 $"IZoomRoomController must expose '{methodName}' for waiting room control");
     }
 
+    [Theory]
+    [InlineData("TerminateSipCall")]
+    [InlineData("CallSip")]
+    [InlineData("SendDtmfToSipCall")]
+    public void IZoomRoomController_Has_Phone_Method(string methodName)
+    {
+        ControllerInterfaceType
+            .GetMethods()
+            .Should().Contain(m => m.Name == methodName,
+                $"IZoomRoomController must expose '{methodName}' for SIP phone control");
+    }
+
     // ── Method return types ───────────────────────────────────────────────────
 
     [Theory]
