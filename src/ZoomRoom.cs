@@ -67,7 +67,11 @@ namespace PepperDash.Essentials.Plugins
         // Carries the far-end camera-control flags the Essentials Participant type does not, so
         // UpdateFarEndCameras() can discover which participants expose controllable cameras.
         private readonly Dictionary<int, ParticipantInfo> _participantInfoByUserId = new Dictionary<int, ParticipantInfo>();
-
+        // Directory/phonebook contacts accumulated from the SDK contact subscription (R-D), keyed by
+        // contact ID. The subscription delivers contacts in pages; merging here lets DirectoryRoot be
+        // rebuilt from the union of all batches received.
+        private readonly object _directoryLock = new object();
+        private readonly Dictionary<string, ContactInfo> _directoryContactsById = new Dictionary<string, ContactInfo>();
         private IHasCameraControls _selectedCamera;
         private CodecDirectory _currentDirectoryResult;
 
@@ -568,6 +572,7 @@ namespace PepperDash.Essentials.Plugins
             _controller.SharingStatusChanged     += OnControllerSharingStatusChanged;
             _controller.VideoPageStatusChanged   += OnControllerVideoPageStatusChanged;
             _controller.SipCallStatusChanged     += OnControllerSipCallStatusChanged;
+            _controller.ContactListChanged       += OnControllerContactListChanged;
 
             _controller.Initialize(_props.SdkConfigPath);
 	    }
@@ -586,6 +591,14 @@ namespace PepperDash.Essentials.Plugins
             if (connected)
             {
                 SeedSpeakerVolume();
+
+                // Auto-download the directory/phonebook unless disabled by config. Results arrive
+                // asynchronously via ContactListChanged and populate DirectoryRoot.
+                if (!_props.DisablePhonebookAutoDownload)
+                {
+                    this.LogInformation("Requesting directory contacts (auto-download)");
+                    _controller.SubscribeContacts(0, 50, false);
+                }
             }
             else
             {
@@ -593,6 +606,9 @@ namespace PepperDash.Essentials.Plugins
                 ActiveCalls.Clear();
                 Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
                 OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
+
+                lock (_directoryLock) _directoryContactsById.Clear();
+                PhonebookSyncState.CodecDisconnected();
             }
         }
 
@@ -1367,9 +1383,22 @@ namespace PepperDash.Essentials.Plugins
 		{
             var ic = contact as InvitableDirectoryContact;
 
-			if (ic != null)
+			if (ic == null || string.IsNullOrEmpty(ic.ContactId))
 			{
-				this.LogWarning("Dial(IInvitableContact) not supported by Zoom Room SDK");
+				this.LogWarning("Dial(IInvitableContact): contact has no ContactId");
+				return;
+			}
+
+			var contactIds = new[] { ic.ContactId };
+			if (IsInCall)
+			{
+				this.LogInformation("Inviting contact {ContactId} to current meeting", ic.ContactId);
+				_controller.InviteAttendees(contactIds);
+			}
+			else
+			{
+				this.LogInformation("Starting new meeting with contact {ContactId}", ic.ContactId);
+				_controller.MeetWithImUsers(contactIds);
 			}
 		}
 
@@ -1380,7 +1409,15 @@ namespace PepperDash.Essentials.Plugins
         /// <param name="duration"></param>
         public void InviteContactsToNewMeeting(List<InvitableDirectoryContact> contacts, uint duration)
         {
-            this.LogWarning("InviteContactsToNewMeeting not supported by Zoom Room SDK");
+            var contactIds = GetContactIds(contacts);
+            if (contactIds.Length == 0)
+            {
+                this.LogWarning("InviteContactsToNewMeeting: no valid contact IDs");
+                return;
+            }
+
+            this.LogInformation("Starting new meeting with {Count} contact(s)", contactIds.Length);
+            _controller.MeetWithImUsers(contactIds);
         }
 
         /// <summary>
@@ -1389,7 +1426,25 @@ namespace PepperDash.Essentials.Plugins
         /// <param name="contacts"></param>
         public void InviteContactsToExistingMeeting(List<InvitableDirectoryContact> contacts)
         {
-            this.LogWarning("InviteContactsToExistingMeeting not supported by Zoom Room SDK");
+            var contactIds = GetContactIds(contacts);
+            if (contactIds.Length == 0)
+            {
+                this.LogWarning("InviteContactsToExistingMeeting: no valid contact IDs");
+                return;
+            }
+
+            this.LogInformation("Inviting {Count} contact(s) to current meeting", contactIds.Length);
+            _controller.InviteAttendees(contactIds);
+        }
+
+        // Extracts the non-empty contact IDs from a list of invitable contacts.
+        private static string[] GetContactIds(List<InvitableDirectoryContact> contacts)
+        {
+            if (contacts == null) return Array.Empty<string>();
+            return contacts
+                .Where(c => c != null && !string.IsNullOrEmpty(c.ContactId))
+                .Select(c => c.ContactId)
+                .ToArray();
         }
 
 
@@ -1433,6 +1488,69 @@ namespace PepperDash.Essentials.Plugins
 		public override void SendDtmf(string s)
 		{
 			SendDtmfToPhone(s);
+		}
+
+		// Maps a batch of SDK contacts into the accumulated directory, rebuilds DirectoryRoot and
+		// publishes the result. The subscription delivers contacts in pages, so batches are merged
+		// by contact ID rather than replacing the whole directory each time.
+		private void OnControllerContactListChanged(object sender, ContactListEventArgs e)
+		{
+			if (e == null || e.Contacts == null) return;
+
+			CodecDirectory directory;
+			lock (_directoryLock)
+			{
+				foreach (var c in e.Contacts)
+				{
+					if (string.IsNullOrEmpty(c.ContactID)) continue;
+					_directoryContactsById[c.ContactID] = c;
+				}
+
+				directory = new CodecDirectory { ResultsFolderId = "root" };
+				directory.AddContactsToDirectory(
+					_directoryContactsById.Values.Select(c => (DirectoryItem)MapDirectoryContact(c)).ToList());
+			}
+
+			this.LogInformation("Directory updated: {ContactCount} contact(s) (batch of {BatchCount})",
+				directory.Contacts.Count, e.Contacts.Length);
+
+			DirectoryRoot = directory;
+
+			PhonebookSyncState.SetPhonebookHasFolders(false);
+			PhonebookSyncState.InitialPhonebookFoldersReceived();
+			PhonebookSyncState.PhonebookRootEntriesReceived();
+			PhonebookSyncState.SetNumberOfContacts(directory.Contacts.Count);
+
+			// Refresh the current view if the user is browsing the root.
+			if (CurrentDirectoryResult == null || CurrentDirectoryResult.ResultsFolderId == "root")
+			{
+				CurrentDirectoryResult = DirectoryRoot;
+			}
+		}
+
+		// Maps a single SDK contact to an Essentials invitable directory contact (flat, parented to root).
+		private static InvitableDirectoryContact MapDirectoryContact(ContactInfo c)
+		{
+			var name = !string.IsNullOrEmpty(c.ScreenName)
+				? c.ScreenName
+				: string.Join(" ", new[] { c.FirstName, c.LastName }.Where(s => !string.IsNullOrEmpty(s)));
+
+			var contact = new InvitableDirectoryContact
+			{
+				Name = string.IsNullOrEmpty(name) ? c.ContactID : name,
+				ContactId = c.ContactID,
+				ParentFolderId = "root",
+			};
+
+			contact.ContactMethods.Add(new ContactMethod
+			{
+				Number = c.ContactID,
+				Device = eContactMethodDevice.Video,
+				CallType = eContactMethodCallType.Video,
+				ContactMethodId = c.ContactID,
+			});
+
+			return contact;
 		}
 
 		/// <summary>

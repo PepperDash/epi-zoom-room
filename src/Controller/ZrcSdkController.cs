@@ -169,6 +169,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.VideoPageStatusChanged  += (s, e) => SafeRaise(() => VideoPageStatusChanged?.Invoke(this, e));
             _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
             _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
+            _sdk.ContactListChanged      += (s, e) => SafeRaise(() => ContactListChanged?.Invoke(this, e));
 
             var effectivePath = string.IsNullOrEmpty(configPath) ? _sdkConfigPath : configPath;
             var result = _sdk.Initialize(effectivePath);
@@ -334,6 +335,12 @@ namespace PepperDash.Essentials.Plugins
         public bool SendDtmfToSipCall(string dtmf, string callId) => Rc(nameof(SendDtmfToSipCall), _sdk.SendDTMFToSIPCall(dtmf, callId));
         public bool CallOutPstnUser(string phoneNumber, bool cancelCall, bool hasVoicePrompt) => Rc(nameof(CallOutPstnUser), _sdk.CallOutPSTNUser(phoneNumber, cancelCall, hasVoicePrompt));
 
+        // ── Contacts / Directory ──────────────────────────────────────────────
+
+        public bool SubscribeContacts(int startIndex, int count, bool searchSip) => Rc(nameof(SubscribeContacts), _sdk.SubscribeContacts(startIndex, count, searchSip));
+        public bool InviteAttendees(string[] contactIds)                          => Rc(nameof(InviteAttendees), _sdk.InviteAttendees(contactIds));
+        public bool MeetWithImUsers(string[] contactIds)                          => Rc(nameof(MeetWithImUsers), _sdk.MeetWithImUsers(contactIds));
+
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
         public bool IsZrcsEnabled() => _sdk.IsZRCSEnabled();
@@ -365,6 +372,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         public event EventHandler<SIPCall> SipCallStatusChanged;
         public event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
+        public event EventHandler<ContactListEventArgs> ContactListChanged;
 
         // ── IDisposable ───────────────────────────────────────────────────────
 

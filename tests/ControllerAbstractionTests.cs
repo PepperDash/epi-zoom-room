@@ -185,6 +185,18 @@ public class ControllerAbstractionTests
                 $"IZoomRoomController must expose '{methodName}' for SIP phone control");
     }
 
+    [Theory]
+    [InlineData("SubscribeContacts")]
+    [InlineData("InviteAttendees")]
+    [InlineData("MeetWithImUsers")]
+    public void IZoomRoomController_Has_Contacts_Method(string methodName)
+    {
+        ControllerInterfaceType
+            .GetMethods()
+            .Should().Contain(m => m.Name == methodName,
+                $"IZoomRoomController must expose '{methodName}' for directory/invite control");
+    }
+
     // ── Method return types ───────────────────────────────────────────────────
 
     [Theory]
@@ -281,6 +293,15 @@ public class ControllerAbstractionTests
             .GetEvents()
             .Should().Contain(e => e.Name == "VideoPageStatusChanged",
                 "IZoomRoomController must expose VideoPageStatusChanged for layout first/last-page feedback");
+    }
+
+    [Fact]
+    public void IZoomRoomController_Has_ContactListChanged_Event()
+    {
+        ControllerInterfaceType
+            .GetEvents()
+            .Should().Contain(e => e.Name == "ContactListChanged",
+                "IZoomRoomController must expose ContactListChanged for directory subscription results");
     }
 
     [Fact]

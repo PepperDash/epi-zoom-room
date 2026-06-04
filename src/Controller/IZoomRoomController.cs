@@ -149,6 +149,20 @@ namespace PepperDash.Essentials.Plugins
         /// </summary>
         bool CallOutPstnUser(string phoneNumber, bool cancelCall, bool hasVoicePrompt);
 
+        // ── Contacts / Directory ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Subscribes to a range of directory contacts. Results arrive via <see cref="ContactListChanged"/>.
+        /// <paramref name="searchSip"/> requests SIP contacts instead of IM contacts.
+        /// </summary>
+        bool SubscribeContacts(int startIndex, int count, bool searchSip);
+
+        /// <summary>Invites the given contacts (by contact ID) into the CURRENT meeting.</summary>
+        bool InviteAttendees(string[] contactIds);
+
+        /// <summary>Starts a NEW meeting with the given contacts (by contact ID).</summary>
+        bool MeetWithImUsers(string[] contactIds);
+
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
         bool IsZrcsEnabled();
@@ -180,5 +194,6 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         event EventHandler<SIPCall> SipCallStatusChanged;
         event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
+        event EventHandler<ContactListEventArgs> ContactListChanged;
     }
 }
