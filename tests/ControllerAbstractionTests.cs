@@ -108,6 +108,8 @@ public class ControllerAbstractionTests
     [InlineData("PinUserOnScreen")]
     [InlineData("UnpinUserFromScreen")]
     [InlineData("ControlUserCamera")]
+    [InlineData("ControlCamera")]
+    [InlineData("ChangeSmartCameraMode")]
     [InlineData("ControlVideoPosition")]
     public void IZoomRoomController_Has_Video_Method(string methodName)
     {
@@ -158,6 +160,18 @@ public class ControllerAbstractionTests
             .GetMethods()
             .Should().Contain(m => m.Name == methodName,
                 $"IZoomRoomController must expose '{methodName}' for recording control");
+    }
+
+    [Theory]
+    [InlineData("GetParticipantCount")]
+    [InlineData("ExpelUser")]
+    [InlineData("AssignHost")]
+    public void IZoomRoomController_Has_Participant_Method(string methodName)
+    {
+        ControllerInterfaceType
+            .GetMethods()
+            .Should().Contain(m => m.Name == methodName,
+                $"IZoomRoomController must expose '{methodName}' for participant control");
     }
 
     [Theory]

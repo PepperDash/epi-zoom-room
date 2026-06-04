@@ -55,15 +55,15 @@ namespace PepperDash.Essentials.Plugins
             LastAction = action;
 
             // Far-end (participant) cameras carry the participant userID in Id and are controlled
-            // via the SDK's ControlUserCamera. Near-end camera control (ControlLocalCamera) needs a
-            // camera device-ID string the plugin does not yet track, so it stays unsupported for now.
+            // via the SDK's ControlUserCamera. Near-end cameras use ControlCamera with an empty
+            // device ID, which the SDK treats as the room's main camera.
             if (this is IAmFarEndCamera && Id.HasValue && Id.Value != 0)
             {
                 ParentCodec.ControlFarEndCamera(Id.Value, state, action);
                 return;
             }
 
-            Serilog.Log.Warning("Near-end camera control not yet wired to the Zoom Room SDK (requires camera device ID)");
+            ParentCodec.ControlNearEndCamera(state, action);
         }
 
         void StartContinueTimer()

@@ -291,6 +291,8 @@ namespace PepperDash.Essentials.Plugins
         public bool PinUserOnScreen(int userId, int screenIndex = 0)    => Rc(nameof(PinUserOnScreen), _sdk.PinUserOnScreen(userId, screenIndex));
         public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => Rc(nameof(UnpinUserFromScreen), _sdk.UnpinUserFromScreen(userId, screenIndex));
         public bool ControlUserCamera(int userId, int action, int type) => Rc(nameof(ControlUserCamera), _sdk.ControlUserCamera(userId, action, type));
+        public bool ControlCamera(string deviceId, int action, int type)    => Rc(nameof(ControlCamera), _sdk.ControlCamera(deviceId, action, type));
+        public bool ChangeSmartCameraMode(int mask, string deviceId = "")   => Rc(nameof(ChangeSmartCameraMode), _sdk.ChangeSmartCameraMode(mask, deviceId));
 
         // ── Layout ────────────────────────────────────────────────────────────
 
@@ -314,6 +316,8 @@ namespace PepperDash.Essentials.Plugins
         // ── Participants ──────────────────────────────────────────────────────
 
         public int GetParticipantCount() => _sdk.GetParticipantCount();
+        public bool ExpelUser(int userId)  => Rc(nameof(ExpelUser), _sdk.ExpelUser(userId));
+        public bool AssignHost(int userId) => Rc(nameof(AssignHost), _sdk.AssignHost(userId));
 
         // ── Share ─────────────────────────────────────────────────────────────
 

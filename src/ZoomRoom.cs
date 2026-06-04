@@ -41,6 +41,7 @@ namespace PepperDash.Essentials.Plugins
         private readonly IZoomRoomController _controller;
         private bool _sdkAudioMuted;
         private bool _sdkCameraOff;
+        private bool _cameraAutoModeOn; // tracks SmartCameraMask: SpeakerFocus(auto) vs Manual
         private bool _sdkIsRecording;
         private bool _sdkCanRecord; // room "can start recording" — from MeetingRecordingInfo.canIRecord
         private bool _sdkMeetingLocked;
@@ -245,7 +246,7 @@ namespace PepperDash.Essentials.Plugins
 
 		protected Func<bool> CameraAutoModeIsOnFeedbackFunc
 		{
-			get { return () => false; }
+			get { return () => _cameraAutoModeOn; }
 		}
 
 		protected Func<string> SelfviewPipPositionFeedbackFunc
@@ -1780,18 +1781,33 @@ namespace PepperDash.Essentials.Plugins
 		/// </summary>
 		internal void ControlFarEndCamera(int userId, eZoomRoomCameraState state, eZoomRoomCameraAction action)
 		{
-			int controlType;   // CameraControlType
+			if (!TryMapCameraCommand(state, action, out var controlAction, out var controlType)) return;
+			_controller.ControlUserCamera(userId, controlAction, controlType);
+		}
+
+		/// <summary>
+		/// Sends a near-end (main camera) PTZ command. Empty device ID targets the room's main camera
+		/// (the SDK's ControlLocalCamera convention).
+		/// </summary>
+		internal void ControlNearEndCamera(eZoomRoomCameraState state, eZoomRoomCameraAction action)
+		{
+			if (!TryMapCameraCommand(state, action, out var controlAction, out var controlType)) return;
+			_controller.ControlCamera(string.Empty, controlAction, controlType);
+		}
+
+		// Maps the plugin's camera enums to the ZRC SDK CameraControlAction / CameraControlType ints.
+		private bool TryMapCameraCommand(eZoomRoomCameraState state, eZoomRoomCameraAction action, out int controlAction, out int controlType)
+		{
+			controlAction = -1; controlType = -1;
 			switch (state)
 			{
 				case eZoomRoomCameraState.Start:    controlType = 0; break; // CameraControlTypeStart
 				case eZoomRoomCameraState.Continue: controlType = 1; break; // CameraControlTypeContinue
 				case eZoomRoomCameraState.Stop:     controlType = 2; break; // CameraControlTypeStop
 				default:
-					this.LogWarning("ControlFarEndCamera: unsupported camera state {State}", state);
-					return;
+					this.LogWarning("Camera command: unsupported state {State}", state);
+					return false;
 			}
-
-			int controlAction; // CameraControlAction
 			switch (action)
 			{
 				case eZoomRoomCameraAction.Up:    controlAction = 0; break; // CameraControlActionMoveUp
@@ -1801,11 +1817,10 @@ namespace PepperDash.Essentials.Plugins
 				case eZoomRoomCameraAction.In:    controlAction = 4; break; // CameraControlActionZoomIn
 				case eZoomRoomCameraAction.Out:   controlAction = 5; break; // CameraControlActionZoomOut
 				default:
-					this.LogWarning("ControlFarEndCamera: unsupported camera action {Action}", action);
-					return;
+					this.LogWarning("Camera command: unsupported action {Action}", action);
+					return false;
 			}
-
-			_controller.ControlUserCamera(userId, controlAction, controlType);
+			return true;
 		}
 
 		#region Implementation of IHasParticipants
@@ -1814,12 +1829,12 @@ namespace PepperDash.Essentials.Plugins
 
         public void RemoveParticipant(int userId)
         {
-            this.LogWarning("RemoveParticipant not supported by Zoom Room SDK");
+            _controller.ExpelUser(userId);
         }
 
         public void SetParticipantAsHost(int userId)
         {
-            this.LogWarning("SetParticipantAsHost not supported by Zoom Room SDK");
+            _controller.AssignHost(userId);
         }
 
         public void AdmitParticipantFromWaitingRoom(int userId)
@@ -2005,19 +2020,29 @@ namespace PepperDash.Essentials.Plugins
 
 		#region Implementation of IHasCameraAutoMode
 
+		// SmartCameraMask: SpeakerFocus(2) = auto-framing follows the speaker; Manual(1) = no auto framing.
+		// Empty device ID targets the room's main camera.
+		private const int SmartCameraMaskManual = 1;
+		private const int SmartCameraMaskSpeakerFocus = 2;
+
 		public void CameraAutoModeOn()
 		{
-			this.LogWarning("CameraAutoModeOn not supported by Zoom Room SDK");
+			if (!_controller.ChangeSmartCameraMode(SmartCameraMaskSpeakerFocus)) return;
+			_cameraAutoModeOn = true;
+			CameraAutoModeIsOnFeedback.FireUpdate();
 		}
 
 		public void CameraAutoModeOff()
 		{
-			this.LogWarning("CameraAutoModeOff not supported by Zoom Room SDK");
+			if (!_controller.ChangeSmartCameraMode(SmartCameraMaskManual)) return;
+			_cameraAutoModeOn = false;
+			CameraAutoModeIsOnFeedback.FireUpdate();
 		}
 
 		public void CameraAutoModeToggle()
 		{
-			this.LogWarning("CameraAutoModeToggle not supported by Zoom Room SDK");
+			if (_cameraAutoModeOn) CameraAutoModeOff();
+			else CameraAutoModeOn();
 		}
 
 		public BoolFeedback CameraAutoModeIsOnFeedback { get; private set; }
@@ -2427,12 +2452,21 @@ namespace PepperDash.Essentials.Plugins
 
 		public void LocalLayoutToggleSingleProminent()
 		{
-			this.LogWarning("LocalLayoutToggleSingleProminent not supported by Zoom Room SDK");
+			// "Single prominent" == one large active-speaker tile == the SDK's Speaker layout.
+			// Toggle between Speaker (prominent) and Gallery using the same VideoLayoutStyle path
+			// as SetLayout. LastSelectedLayout is updated by SetLayout so feedback stays in sync.
+			var next = LastSelectedLayout == zConfiguration.eLayoutStyle.Speaker
+				? zConfiguration.eLayoutStyle.Gallery
+				: zConfiguration.eLayoutStyle.Speaker;
+			SetLayout(next);
 		}
 
 		public void MinMaxLayoutToggle()
 		{
-			this.LogWarning("MinMaxLayoutToggle not supported by Zoom Room SDK");
+			// No direct ZRC SDK equivalent: the SDK exposes discrete VideoLayoutStyle values
+			// (Gallery/Speaker/Thumbnail/ContentOnly) but no "minimize/maximize" toggle. The
+			// closest single-screen behavior (float share vs. video) is SwapContentWithThumbnail.
+			this.LogWarning("MinMaxLayoutToggle has no Zoom Room SDK equivalent; use SwapContentWithThumbnail or a discrete layout instead");
 		}
 
 		#endregion

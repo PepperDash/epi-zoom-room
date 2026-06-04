@@ -79,6 +79,12 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Controls a far-end (participant) camera. action = CameraControlAction, type = CameraControlType (Start/Continue/Stop).</summary>
         bool ControlUserCamera(int userId, int action, int type);
 
+        /// <summary>Controls a local camera. deviceId = camera device ID ("" = main/near-end camera). action = CameraControlAction, type = CameraControlType.</summary>
+        bool ControlCamera(string deviceId, int action, int type);
+
+        /// <summary>Sets the smart/auto camera framing mode. mask = SmartCameraMask, deviceId = "" for the main camera.</summary>
+        bool ChangeSmartCameraMode(int mask, string deviceId = "");
+
         // ── Layout ────────────────────────────────────────────────────────────
 
         int SetScreenLayout(int screen, int layoutSourceType);
@@ -110,6 +116,12 @@ namespace PepperDash.Essentials.Plugins
         // ── Participants ──────────────────────────────────────────────────────
 
         int GetParticipantCount();
+
+        /// <summary>Expels (removes) a participant from the meeting. Host only.</summary>
+        bool ExpelUser(int userId);
+
+        /// <summary>Assigns the host role to a participant. Host only.</summary>
+        bool AssignHost(int userId);
 
         // ── Share ─────────────────────────────────────────────────────────────
 
