@@ -933,10 +933,10 @@ namespace PepperDash.Essentials.Plugins
 			}
 		}
 
-		// The ZRC SDK speaker volume is a float on (assumed) a 0-100 scale; the Essentials slider is
-		// 0-65535. Both conversions live here, so if hardware shows a different SDK range this is a
-		// one-line change. The SDK has no discrete output-mute, so MuteOn/Off set/restore the volume.
-		private const float SdkSpeakerVolumeMax = 100f;
+		// The ZRC SDK speaker volume float is on a 0-255 scale (confirmed on hardware .116, and matches
+		// the SDK's far-end audio volume range [0,255]); the Essentials slider is 0-65535. Both
+		// conversions live here. The SDK has no discrete output-mute, so MuteOn/Off set/restore the volume.
+		private const float SdkSpeakerVolumeMax = 255f;
 		private const ushort VolumeStep = 3277; // ~5% of 65535 per VolumeUp/Down press
 
 		private static float LevelToSdkVolume(ushort level) => level / 65535f * SdkSpeakerVolumeMax;
