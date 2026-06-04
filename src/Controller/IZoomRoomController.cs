@@ -63,6 +63,12 @@ namespace PepperDash.Essentials.Plugins
         bool AnswerUnmuteRequest(bool accepted);
         bool AllowAttendeesUnmute(bool allow);
 
+        /// <summary>Sets the room speaker (audio output) volume, in the SDK's native float scale.</summary>
+        bool SetSpeakerVolume(float volume);
+
+        /// <summary>Gets the room speaker (audio output) volume in the SDK's native float scale; returns -1 on failure.</summary>
+        float GetSpeakerVolume();
+
         // ── Video ─────────────────────────────────────────────────────────────
 
         bool SetVideoState(bool start);

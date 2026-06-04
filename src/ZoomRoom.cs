@@ -57,6 +57,9 @@ namespace PepperDash.Essentials.Plugins
         private bool _layoutIsOnLastPage;
         private int  _currentPageVideoType; // PageVideoType (0 = GalleryView)
         private bool _contentSwappedWithThumbnail;
+        // Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
+        private ushort _sdkSpeakerVolumeLevel;
+        private bool _sdkSpeakerMuted;
 
         private readonly object _participantLock = new object();
 
@@ -169,7 +172,7 @@ namespace PepperDash.Essentials.Plugins
 		/// </summary>
 		protected override Func<int> VolumeLevelFeedbackFunc
 		{
-			get { return () => 0; } // Volume not supported by Zoom Room SDK
+			get { return () => _sdkSpeakerVolumeLevel; } // room audio-output (speaker) level, 0-65535
 		}
 
 		protected override Func<bool> PrivacyModeIsOnFeedbackFunc
@@ -199,7 +202,7 @@ namespace PepperDash.Essentials.Plugins
 
 		protected override Func<bool> MuteFeedbackFunc
 		{
-			get { return () => false; } // Volume mute not supported by Zoom Room SDK
+			get { return () => _sdkSpeakerMuted; } // room audio-output mute (volume zeroed)
 		}
 
 		//protected Func<bool> RoomIsOccupiedFeedbackFunc
@@ -574,13 +577,30 @@ namespace PepperDash.Essentials.Plugins
 
             ((SdkConnectionMonitor)CommunicationMonitor).SetOnline(connected);
 
-            if (!connected)
+            if (connected)
+            {
+                SeedSpeakerVolume();
+            }
+            else
             {
                 // Reset in-call state on disconnect
                 ActiveCalls.Clear();
                 Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
                 OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
             }
+        }
+
+        // Reads the current room speaker volume once on connect so the volume feedback reflects
+        // the real level. There is no SDK push for output-volume changes, so external (Zoom UI)
+        // changes won't update the feedback until the next set from this plugin.
+        private void SeedSpeakerVolume()
+        {
+            var sdkVolume = _controller.GetSpeakerVolume();
+            if (sdkVolume < 0f) return; // get failed (e.g. setting service not ready yet)
+            _sdkSpeakerVolumeLevel = (ushort)Math.Round(Math.Max(0f, Math.Min(SdkSpeakerVolumeMax, sdkVolume)) / SdkSpeakerVolumeMax * 65535f);
+            _sdkSpeakerMuted = _sdkSpeakerVolumeLevel == 0;
+            VolumeLevelFeedback.FireUpdate();
+            MuteFeedback.FireUpdate();
         }
 
         private void OnControllerMeetingStatusChanged(object sender, SdkEventArgs e)
@@ -913,14 +933,28 @@ namespace PepperDash.Essentials.Plugins
 			}
 		}
 
+		// The ZRC SDK speaker volume is a float on (assumed) a 0-100 scale; the Essentials slider is
+		// 0-65535. Both conversions live here, so if hardware shows a different SDK range this is a
+		// one-line change. The SDK has no discrete output-mute, so MuteOn/Off set/restore the volume.
+		private const float SdkSpeakerVolumeMax = 100f;
+		private const ushort VolumeStep = 3277; // ~5% of 65535 per VolumeUp/Down press
+
+		private static float LevelToSdkVolume(ushort level) => level / 65535f * SdkSpeakerVolumeMax;
+
 		public override void MuteOff()
 		{
-			this.LogWarning("Volume mute not supported by Zoom Room SDK");
+			if (!_sdkSpeakerMuted) return;
+			_sdkSpeakerMuted = false;
+			_controller.SetSpeakerVolume(LevelToSdkVolume(_sdkSpeakerVolumeLevel));
+			MuteFeedback.FireUpdate();
 		}
 
 		public override void MuteOn()
 		{
-			this.LogWarning("Volume mute not supported by Zoom Room SDK");
+			if (_sdkSpeakerMuted) return;
+			_sdkSpeakerMuted = true;
+			_controller.SetSpeakerVolume(0f); // no discrete SDK output-mute; zero the volume, restore on unmute
+			MuteFeedback.FireUpdate();
 		}
 
 		public override void MuteToggle()
@@ -942,7 +976,8 @@ namespace PepperDash.Essentials.Plugins
 		/// <param name="pressRelease"></param>
 		public override void VolumeUp(bool pressRelease)
 		{
-			// TODO: Implment volume decrement that calls SetVolume()
+			if (!pressRelease) return; // act on press; continuous press-hold ramp could be added with a timer
+			SetVolume((ushort)Math.Min(ushort.MaxValue, _sdkSpeakerVolumeLevel + VolumeStep));
 		}
 
 		/// <summary>
@@ -951,7 +986,8 @@ namespace PepperDash.Essentials.Plugins
 		/// <param name="pressRelease"></param>
 		public override void VolumeDown(bool pressRelease)
 		{
-			// TODO: Implment volume decrement that calls SetVolume()
+			if (!pressRelease) return;
+			SetVolume((ushort)Math.Max(0, _sdkSpeakerVolumeLevel - VolumeStep));
 		}
 
 		/// <summary>
@@ -960,7 +996,11 @@ namespace PepperDash.Essentials.Plugins
 		/// <param name="level">level from slider (0-65535 range)</param>
 		public override void SetVolume(ushort level)
 		{
-			this.LogWarning("Volume control not supported by Zoom Room SDK");
+			_sdkSpeakerVolumeLevel = level;
+			_sdkSpeakerMuted = false; // actively setting volume clears mute
+			_controller.SetSpeakerVolume(LevelToSdkVolume(level));
+			VolumeLevelFeedback.FireUpdate();
+			MuteFeedback.FireUpdate();
 		}
 
 		/// <summary>

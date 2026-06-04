@@ -260,6 +260,8 @@ namespace PepperDash.Essentials.Plugins
         public bool SetMuteOnEntry(bool mute)                  => _sdk.SetMuteOnEntry(mute);
         public bool AnswerUnmuteRequest(bool accepted)         => _sdk.AnswerUnmuteRequest(accepted);
         public bool AllowAttendeesUnmute(bool allow)           => _sdk.AllowAttendeesUnmute(allow);
+        public bool SetSpeakerVolume(float volume)             => _sdk.SetSpeakerVolume(volume);
+        public float GetSpeakerVolume()                        => _sdk.GetSpeakerVolume(out var v) ? v : -1f;
 
         // ── Video ─────────────────────────────────────────────────────────────
 
