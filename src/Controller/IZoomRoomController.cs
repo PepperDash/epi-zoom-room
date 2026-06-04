@@ -49,6 +49,9 @@ namespace PepperDash.Essentials.Plugins
         bool JoinMeetingWithUrl(string url);
         bool EndMeeting();
         bool LeaveMeeting();
+
+        /// <summary>Accepts (true) or declines (false) the incoming meeting invite from the last MeetingInvite event.</summary>
+        bool AnswerMeetingInvite(bool accept);
         bool SendMeetingPassword(string password);
         bool CancelEnteringMeetingPassword();
         bool CancelWaitingForHost();

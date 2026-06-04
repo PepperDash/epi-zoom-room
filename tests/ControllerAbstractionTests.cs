@@ -78,6 +78,7 @@ public class ControllerAbstractionTests
     [InlineData("CancelEnteringMeetingPassword")]
     [InlineData("CancelWaitingForHost")]
     [InlineData("LockMeeting")]
+    [InlineData("AnswerMeetingInvite")]
     public void IZoomRoomController_Has_Meeting_Method(string methodName)
     {
         ControllerInterfaceType

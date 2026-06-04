@@ -250,6 +250,7 @@ namespace PepperDash.Essentials.Plugins
         public bool JoinMeetingWithUrl(string url)          => _sdk.JoinMeetingWithURL(url);
         public bool EndMeeting()                            => _sdk.EndMeeting();
         public bool LeaveMeeting()                          => _sdk.LeaveMeeting();
+        public bool AnswerMeetingInvite(bool accept)        => Rc(nameof(AnswerMeetingInvite), _sdk.AnswerMeetingInvite(accept));
         public bool SendMeetingPassword(string password)    => _sdk.SendMeetingPassword(password);
         public bool CancelEnteringMeetingPassword()         => _sdk.CancelEnteringMeetingPassword();
         public bool CancelWaitingForHost()                  => _sdk.CancelWaitingForHost();

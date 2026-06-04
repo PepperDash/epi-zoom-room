@@ -1379,7 +1379,9 @@ namespace PepperDash.Essentials.Plugins
 
 		public override void RejectCall(CodecActiveCallItem call)
 		{
-			this.LogWarning("RejectCall not supported by Zoom Room SDK");
+			// Decline the incoming meeting invite via the SDK (it answers the cached invite with
+			// accept=false). The local call-status update keeps the UI in sync regardless.
+			_controller.AnswerMeetingInvite(false);
 			if (call != null)
 			{
 				call.Status = eCodecCallStatus.Disconnected;
