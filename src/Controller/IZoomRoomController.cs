@@ -157,6 +157,7 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<SdkEventArgs> AudioMuteStatusChanged;
         event EventHandler<SdkEventArgs> RecordingStatusChanged;
         event EventHandler<SdkEventArgs> RecordingRequestReceived;
+        event EventHandler<MeetingRecordingInfoEventArgs> MeetingRecordingInfoChanged;
         event EventHandler<ParticipantListEventArgs> ParticipantsInitialized;
         event EventHandler<ParticipantListEventArgs> UserJoined;
         event EventHandler<ParticipantListEventArgs> UserLeft;

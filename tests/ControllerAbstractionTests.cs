@@ -270,6 +270,15 @@ public class ControllerAbstractionTests
                 "IZoomRoomController must expose VideoPageStatusChanged for layout first/last-page feedback");
     }
 
+    [Fact]
+    public void IZoomRoomController_Has_MeetingRecordingInfoChanged_Event()
+    {
+        ControllerInterfaceType
+            .GetEvents()
+            .Should().Contain(e => e.Name == "MeetingRecordingInfoChanged",
+                "IZoomRoomController must expose MeetingRecordingInfoChanged for MeetingInfo.CanRecord");
+    }
+
     // ── Password caching API ──────────────────────────────────────────────────
 
     [Fact]

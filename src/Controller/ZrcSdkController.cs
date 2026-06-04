@@ -158,6 +158,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.AudioStatus             += (s, e) => SafeRaise(() => AudioMuteStatusChanged?.Invoke(this, e));
             _sdk.RecordingStatus         += (s, e) => SafeRaise(() => RecordingStatusChanged?.Invoke(this, e));
             _sdk.RecordingRequest        += (s, e) => SafeRaise(() => RecordingRequestReceived?.Invoke(this, e));
+            _sdk.MeetingRecordingInfoChanged += (s, e) => SafeRaise(() => MeetingRecordingInfoChanged?.Invoke(this, e));
             _sdk.ParticipantsInitialized += (s, e) => SafeRaise(() => ParticipantsInitialized?.Invoke(this, e));
             _sdk.UserJoined              += (s, e) => SafeRaise(() => UserJoined?.Invoke(this, e));
             _sdk.UserLeft                += (s, e) => SafeRaise(() => UserLeft?.Invoke(this, e));
@@ -332,6 +333,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SdkEventArgs> AudioMuteStatusChanged;
         public event EventHandler<SdkEventArgs> RecordingStatusChanged;
         public event EventHandler<SdkEventArgs> RecordingRequestReceived;
+        public event EventHandler<MeetingRecordingInfoEventArgs> MeetingRecordingInfoChanged;
         public event EventHandler<ParticipantListEventArgs> ParticipantsInitialized;
         public event EventHandler<ParticipantListEventArgs> UserJoined;
         public event EventHandler<ParticipantListEventArgs> UserLeft;

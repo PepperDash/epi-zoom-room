@@ -41,6 +41,7 @@ namespace PepperDash.Essentials.Plugins
         private bool _sdkAudioMuted;
         private bool _sdkCameraOff;
         private bool _sdkIsRecording;
+        private bool _sdkCanRecord; // room "can start recording" — from MeetingRecordingInfo.canIRecord
         private bool _sdkMeetingLocked;
         private bool _sdkIsHost;
         // SDK gap: ZrcSdk does not surface a host-name event; _sdkHostName stays empty.
@@ -552,6 +553,7 @@ namespace PepperDash.Essentials.Plugins
             _controller.MeetingLockStatusChanged += OnControllerMeetingLockStatusChanged;
             _controller.AudioMuteStatusChanged   += OnControllerAudioMuteStatusChanged;
             _controller.RecordingStatusChanged   += OnControllerRecordingStatusChanged;
+            _controller.MeetingRecordingInfoChanged += OnControllerMeetingRecordingInfoChanged;
             _controller.RecordingRequestReceived += OnControllerRecordingRequestReceived;
             _controller.ParticipantsInitialized  += OnControllerParticipantsInitialized;
             _controller.UserJoined               += OnControllerUserJoined;
@@ -746,6 +748,12 @@ namespace PepperDash.Essentials.Plugins
             _sdkIsRecording = e.ErrorCode == 1;
             MeetingIsRecordingFeedback.FireUpdate();
             UpdateMeetingInfo();
+        }
+
+        private void OnControllerMeetingRecordingInfoChanged(object sender, MeetingRecordingInfoEventArgs e)
+        {
+            _sdkCanRecord = e.CanIRecord;
+            UpdateMeetingInfo(); // refreshes MeetingInfo.CanRecord on the bridge join
         }
 
         private void OnControllerRecordingRequestReceived(object sender, SdkEventArgs e)
@@ -2222,7 +2230,7 @@ namespace PepperDash.Essentials.Plugins
                 false,
                 _sdkMeetingLocked,
                 _sdkIsRecording,
-                false);
+                _sdkCanRecord);
         }
 
 	    #region Implementation of IHasPresentationOnlyMeeting
