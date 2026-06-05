@@ -978,6 +978,7 @@ namespace PepperDash.Essentials.Plugins
                         {
                             existing.Name           = info.UserName;
                             existing.IsHost         = info.IsHost;
+                            existing.IsCohost       = info.IsCohost;
                             existing.AudioMuteFb    = info.AudioMuted;
                             existing.VideoMuteFb    = !info.VideoSending;
                             existing.HandIsRaisedFb = info.HandRaised;
@@ -1052,6 +1053,7 @@ namespace PepperDash.Essentials.Plugins
                 UserId         = info.UserID,
                 Name           = info.UserName,
                 IsHost         = info.IsHost,
+                IsCohost       = info.IsCohost,
                 IsMyself       = info.IsMySelf,
                 AudioMuteFb    = info.AudioMuted,
                 VideoMuteFb    = !info.VideoSending,
@@ -2118,8 +2120,8 @@ namespace PepperDash.Essentials.Plugins
             foreach (var p in list)
             {
                 this.LogInformation(
-                    "  userId={UserId} name=\"{Name}\" host={IsHost} self={IsMyself} audioMuted={AudioMuted} videoMuted={VideoMuted} handRaised={HandRaised}",
-                    p.UserId, p.Name, p.IsHost, p.IsMyself, p.AudioMuteFb, p.VideoMuteFb, p.HandIsRaisedFb);
+                    "  userId={UserId} name=\"{Name}\" host={IsHost} cohost={IsCohost} self={IsMyself} audioMuted={AudioMuted} videoMuted={VideoMuted} handRaised={HandRaised}",
+                    p.UserId, p.Name, p.IsHost, p.IsCohost, p.IsMyself, p.AudioMuteFb, p.VideoMuteFb, p.HandIsRaisedFb);
             }
         }
 
