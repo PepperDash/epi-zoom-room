@@ -344,7 +344,7 @@ namespace PepperDash.Essentials.Plugins
 
             if (camera == null)
             {
-                this.LogWarning("SelectCamera: no camera with key {Key}", key);
+                this.LogWarning("SelectCamera: no camera with key {CameraKey}", key);
                 return;
             }
 
@@ -364,7 +364,7 @@ namespace PepperDash.Essentials.Plugins
             {
                 // SDK rejected the switch (wrong meeting state, device unavailable). Leave SelectedCamera
                 // unchanged and re-assert the true current selection so the UI doesn't desync from intent.
-                this.LogWarning("SelectCamera: SDK rejected switch to {Key}; selection unchanged.", key);
+                this.LogWarning("SelectCamera: SDK rejected switch to {CameraKey}; selection unchanged.", key);
                 SelectedCameraFeedback.FireUpdate();
             }
         }

@@ -39,7 +39,7 @@ namespace PepperDash.Essentials.Plugins
             }
             catch (Exception ex)
             {
-                controller.LogError(ex, "Factory: failed to build ZoomRoom device '{Key}': {Message}", dc.Key, ex.Message);
+                controller.LogError(ex, "Factory: failed to build ZoomRoom device '{DeviceKey}': {Message}", dc.Key, ex.Message);
                 throw;
             }
         }
