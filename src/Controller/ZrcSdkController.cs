@@ -423,7 +423,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SdkEventArgs> StartPmiResult;
         public event EventHandler<SdkEventArgs> ExitMeeting;
         public event EventHandler<SdkEventArgs> MeetingNeedsPassword;
-        public event EventHandler<SdkEventArgs> MeetingInvite;
+        public event EventHandler<MeetingInviteEventArgs> MeetingInvite;
         public event EventHandler<SdkEventArgs> MeetingLockStatusChanged;
         public event EventHandler<SdkEventArgs> AudioMuteStatusChanged;
         public event EventHandler<SdkEventArgs> RecordingStatusChanged;

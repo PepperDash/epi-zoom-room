@@ -837,21 +837,23 @@ namespace PepperDash.Essentials.Plugins
             OnPasswordRequired(wrongAndRetry, false, false, "Password required to join this meeting.");
         }
 
-        private void OnControllerMeetingInvite(object sender, SdkEventArgs e)
+        private void OnControllerMeetingInvite(object sender, MeetingInviteEventArgs e)
         {
             // Fires on OnReceiveMeetingInviteNotification (a contact/room inviting this room into a
-            // meeting). e.Message is the caller name; the native side caches the full invite so it
-            // can be answered with AnswerMeetingInvite. Surface it as a Ringing/Incoming ActiveCall so
-            // the standard codec Accept/Reject (and touchpanel incoming-call UI) work.
-            var caller = string.IsNullOrEmpty(e.Message) ? "Incoming meeting invite" : e.Message;
-            this.LogInformation("MeetingInvite received from \"{Caller}\"", caller);
+            // meeting). The native side caches the full invite so it can be answered with
+            // AnswerMeetingInvite. Surface it as a Ringing/Incoming ActiveCall (with caller + meeting
+            // details) so the standard codec Accept/Reject (and touchpanel incoming-call UI) work.
+            var caller = string.IsNullOrEmpty(e.CallerName) ? "Incoming meeting invite" : e.CallerName;
+            this.LogInformation("MeetingInvite received from \"{Caller}\" meetingNumber={MeetingNumber} meetingId={MeetingId} contactId={ContactId}",
+                caller, e.MeetingNumber, e.MeetingId, e.CallerContactId);
 
             if (_pendingInviteCall != null) return; // already ringing
 
             _pendingInviteCall = new CodecActiveCallItem
             {
                 Name      = caller,
-                Id        = "meeting-invite",
+                Number    = e.MeetingNumber,
+                Id        = string.IsNullOrEmpty(e.MeetingNumber) ? "meeting-invite" : e.MeetingNumber,
                 Status    = eCodecCallStatus.Ringing,
                 Direction = eCodecCallDirection.Incoming,
                 Type      = eCodecCallType.Video,
@@ -1780,6 +1782,7 @@ namespace PepperDash.Essentials.Plugins
 			var meetings = e.Meetings
 				.Select(MapMeeting)
 				.Where(m => m != null)
+				.OrderBy(m => m.StartTime)   // chronological order
 				.ToList();
 
 			this.LogInformation("Schedule updated: {MeetingCount} meeting(s) (result {Result})",
@@ -2060,6 +2063,41 @@ namespace PepperDash.Essentials.Plugins
         public void AdmitParticipantFromWaitingRoom(int userId)
         {
             _controller.AdmitUserFromWaitingRoom(userId);
+        }
+
+        /// <summary>Admits everyone currently in the waiting room into the meeting.</summary>
+        public void AdmitAllParticipantsFromWaitingRoom()
+        {
+            _controller.AdmitAllFromWaitingRoom();
+        }
+
+        /// <summary>Moves a participant (back) into the waiting room.</summary>
+        public void PutParticipantInWaitingRoom(int userId)
+        {
+            _controller.PutUserInWaitingRoom(userId);
+        }
+
+        /// <summary>
+        /// Console/test helper: lists participants currently in the waiting room. The ZRC SDK has no
+        /// dedicated waiting-room roster — waiting users arrive in the normal participant feed flagged
+        /// "silent mode" (<see cref="ParticipantInfo.IsInSilentMode"/>). Admit them with
+        /// <see cref="AdmitParticipantFromWaitingRoom"/> / <see cref="AdmitAllParticipantsFromWaitingRoom"/>.
+        /// </summary>
+        public void LogWaitingRoom()
+        {
+            List<ParticipantInfo> waiting;
+            lock (_participantLock)
+                waiting = _participantInfoByUserId.Values.Where(p => p.IsInSilentMode).ToList();
+
+            if (waiting.Count == 0)
+            {
+                this.LogInformation("Waiting room: (empty — no participants in silent mode)");
+                return;
+            }
+
+            this.LogInformation("Waiting room ({Count}):", waiting.Count);
+            foreach (var p in waiting)
+                this.LogInformation("  userId={UserId} name=\"{Name}\"", p.UserID, p.UserName);
         }
 
         /// <summary>
