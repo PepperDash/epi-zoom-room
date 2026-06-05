@@ -272,14 +272,10 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
         private void LayoutsCodec_LayoutInfoChanged(object sender, LayoutInfoChangedEventArgs e)
         {
-            var status = new ZoomRoomStateMessage
-            {
-                Layouts = new ZoomRoomLayoutState
-                {
-                    AvailableLayouts = e.AvailableLayouts,
-                    LayoutViewIsOnFirstPage = e.LayoutViewIsOnFirstPage
-                }
-            };
+            // Build the layout state from the single BuildLayoutState() site so the incremental push
+            // carries the same complete set of fields (last-page indicator, thumbnail-swap flags) as the
+            // full-status snapshot, instead of only AvailableLayouts/LayoutViewIsOnFirstPage.
+            var status = new ZoomRoomStateMessage { Layouts = BuildLayoutState() };
             Task.Run(() => PostStatusMessage(status));
         }
     }

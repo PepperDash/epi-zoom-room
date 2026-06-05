@@ -64,6 +64,11 @@ namespace PepperDash.Essentials.Plugins
         private ushort _sdkSpeakerVolumeLevel;
         private bool _sdkSpeakerMuted;
 
+        // True once the SDK reports the room Connected/Established. Gates outbound command methods so
+        // join/start/invite actions issued before the room is paired/connected are dropped with a clear
+        // log entry instead of silently failing inside the SDK (the old ZoomRoomSyncState used to gate this).
+        private volatile bool _isConnected;
+
         private readonly object _participantLock = new object();
         // Raw SDK participant info keyed by userID, kept in sync with Participants.CurrentParticipants.
         // Carries the far-end camera-control flags the Essentials Participant type does not, so
@@ -211,9 +216,13 @@ namespace PepperDash.Essentials.Plugins
 			get { return () => _sdkSharingState != 0; }
 		}
 
+		// KNOWN LIMITATION: the ZRC SDK's sharing status (SharingStatusEventArgs.SharingState, surfaced via
+		// OnControllerSharingStatusChanged) reports only THIS room's sharing — there is no far-end/remote
+		// sharing signal. ReceivingContent is therefore hardwired false and must NOT be relied upon to detect
+		// a remote participant sharing. Revisit if/when the SDK exposes a far-end sharing flag.
 		protected Func<bool> FarEndIsSharingContentFeedbackFunc
 		{
-			get { return () => false; } // SDK does not report far-end sharing state separately
+			get { return () => false; }
 		}
 
 		protected override Func<bool> MuteFeedbackFunc
@@ -298,6 +307,9 @@ namespace PepperDash.Essentials.Plugins
 
 		#region IHasCodecCameras Members
 
+		// BREAKING CHANGE (v3 migration): this event's signature changed from the non-generic
+		// EventHandler<CameraSelectedEventArgs> to EventHandler<CameraSelectedEventArgs<IHasCameraControls>>.
+		// Subscribers compiled against the old signature must update their handler to the generic args type.
 		public event EventHandler<CameraSelectedEventArgs<IHasCameraControls>> CameraSelected;
 
 		public List<IHasCameraControls> Cameras { get; private set; }
@@ -324,7 +336,12 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SelectCamera(string key)
         {
-            var camera = Cameras.FirstOrDefault(c => c.Key.Equals(key));
+            // Read the camera list under _participantLock — SetUpCameras and UpdateFarEndCameras
+            // mutate Cameras from the SDK connection/participant threads.
+            IHasCameraControls camera;
+            lock (_participantLock)
+                camera = Cameras.FirstOrDefault(c => c.Key.Equals(key));
+
             if (camera == null)
             {
                 this.LogWarning("SelectCamera: no camera with key {Key}", key);
@@ -343,6 +360,13 @@ namespace PepperDash.Essentials.Plugins
             {
                 SelectedCamera = camera;
             }
+            else
+            {
+                // SDK rejected the switch (wrong meeting state, device unavailable). Leave SelectedCamera
+                // unchanged and re-assert the true current selection so the UI doesn't desync from intent.
+                this.LogWarning("SelectCamera: SDK rejected switch to {Key}; selection unchanged.", key);
+                SelectedCameraFeedback.FireUpdate();
+            }
         }
 
 		public CameraBase FarEndCamera { get; private set; }
@@ -355,6 +379,12 @@ namespace PepperDash.Essentials.Plugins
 
 		public BoolFeedback SelfviewIsOnFeedback { get; private set; }
 
+		/// <summary>
+		/// Re-emits the self-view feedback from plugin-cached state. NOTE: the ZRC SDK exposes no
+		/// self-view query, so this does NOT refresh from the device — a self-view change made on the
+		/// native Zoom Room UI is not reflected until this plugin next sets it. (IHasCodecSelfView
+		/// requires this method name; it cannot be renamed to signal the cached-only behavior.)
+		/// </summary>
 		public void GetSelfViewMode() { SelfviewIsOnFeedback.FireUpdate(); }
 
 		public void SelfViewModeOn()
@@ -600,7 +630,13 @@ namespace PepperDash.Essentials.Plugins
             _controller.ContactListChanged       += OnControllerContactListChanged;
             _controller.MeetingListChanged       += OnControllerMeetingListChanged;
 
-            _controller.Initialize(_props.SdkConfigPath);
+            if (!_controller.Initialize(_props.SdkConfigPath))
+            {
+                // Surface init failures (bad/missing SdkConfigPath, native wrapper load failure, etc.)
+                // instead of silently proceeding as if the SDK were ready. _isConnected stays false,
+                // so command methods are gated off (see EnsureConnected) and the comms monitor stays offline.
+                this.LogError("ZRC SDK controller failed to initialize (sdkConfigPath=\"{Path}\"). Device will not be functional.", _props.SdkConfigPath);
+            }
 	    }
 
 	    #endregion
@@ -612,6 +648,7 @@ namespace PepperDash.Essentials.Plugins
             var connected = e.ErrorCode == (int)ConnectionState.Established || e.ErrorCode == (int)ConnectionState.Connected;
             this.LogInformation("SDK connection state changed: {State} ({Code})", (ConnectionState)e.ErrorCode, e.ErrorCode);
 
+            _isConnected = connected;
             ((SdkConnectionMonitor)CommunicationMonitor).SetOnline(connected);
 
             if (connected)
@@ -644,6 +681,15 @@ namespace PepperDash.Essentials.Plugins
                 lock (_directoryLock) _directoryContactsById.Clear();
                 PhonebookSyncState.CodecDisconnected();
             }
+        }
+
+        // Readiness gate for outbound commands. Returns false (and logs) when the SDK is not yet
+        // Connected/Established, so callers can no-op instead of firing a command the SDK will reject.
+        private bool EnsureConnected(string operation)
+        {
+            if (_isConnected) return true;
+            this.LogWarning("{Operation} ignored: ZRC SDK is not connected yet.", operation);
+            return false;
         }
 
         // Reads the current room speaker volume once on connect so the volume feedback reflects
@@ -1391,12 +1437,14 @@ namespace PepperDash.Essentials.Plugins
 
 		public override void Dial(Meeting meeting)
 		{
+			if (!EnsureConnected("Dial(meeting)")) return;
 			this.LogInformation("Dialing meeting.Id: {MeetingId} Title: {MeetingTitle}", meeting.Id, meeting.Title);
 			_controller.JoinMeeting(meeting.Id);
 		}
 
 		public override void Dial(string number)
 		{
+			if (!EnsureConnected("Dial(number)")) return;
 			this.LogDebug("Dialing number: {Number}", number);
 			_controller.JoinMeeting(number);
 		}
@@ -1406,6 +1454,7 @@ namespace PepperDash.Essentials.Plugins
         /// </summary>
         public void Dial(string number, string password)
         {
+            if (!EnsureConnected("Dial(number,password)")) return;
             this.LogDebug("Dialing meeting number: {Number} with password: {Password}", number, password);
             _controller.JoinMeetingWithPassword(number, password);
         }
@@ -1417,6 +1466,8 @@ namespace PepperDash.Essentials.Plugins
 		/// <param name="contact"></param>
 		public override void Dial(IInvitableContact contact)
 		{
+			if (!EnsureConnected("Dial(contact)")) return;
+
             var ic = contact as InvitableDirectoryContact;
 
 			if (ic == null || string.IsNullOrEmpty(ic.ContactId))
@@ -1445,6 +1496,7 @@ namespace PepperDash.Essentials.Plugins
         /// <param name="duration"></param>
         public void InviteContactsToNewMeeting(List<InvitableDirectoryContact> contacts, uint duration)
         {
+            if (!EnsureConnected("InviteContactsToNewMeeting")) return;
             var contactIds = GetContactIds(contacts);
             if (contactIds.Length == 0)
             {
@@ -1462,6 +1514,7 @@ namespace PepperDash.Essentials.Plugins
         /// <param name="contacts"></param>
         public void InviteContactsToExistingMeeting(List<InvitableDirectoryContact> contacts)
         {
+            if (!EnsureConnected("InviteContactsToExistingMeeting")) return;
             var contactIds = GetContactIds(contacts);
             if (contactIds.Length == 0)
             {
@@ -1490,6 +1543,7 @@ namespace PepperDash.Essentials.Plugins
         /// <param name="duration">duration of meeting</param>
         public void StartMeeting(uint duration)
         {
+            if (!EnsureConnected("StartMeeting")) return;
             _controller.StartInstantMeeting();
         }
 
@@ -1705,26 +1759,36 @@ namespace PepperDash.Essentials.Plugins
 			}
 			else
 			{
-				foreach (var dev in devices)
+				// Mutate the shared Cameras list under _participantLock; UpdateFarEndCameras (on the
+				// participant thread) and SelectCamera (on the UI thread) also serialize on this lock.
+				IHasCameraControls cameraToSelect = null;
+				lock (_participantLock)
 				{
-					// Crestron UC engine systems report the USB bridge device in the camera list; skip it.
-					if (!string.IsNullOrEmpty(dev.Name) && dev.Name.IndexOf("HD-CONV-USB") > -1)
-						continue;
-
-					var existingCam = Cameras.FirstOrDefault((c) => c.Key.Equals(dev.Id));
-					if (existingCam == null)
+					foreach (var dev in devices)
 					{
-						var displayName = string.IsNullOrEmpty(dev.DisplayName) ? dev.Name : dev.DisplayName;
-						Cameras.Add(new ZoomRoomCamera(dev.Id, displayName, this));
-						this.LogDebug("Added near-end camera id=\"{Id}\" name=\"{Name}\"", dev.Id, displayName);
-					}
+						// Crestron UC engine systems report the USB bridge device in the camera list; skip it.
+						if (!string.IsNullOrEmpty(dev.Name) && dev.Name.IndexOf("HD-CONV-USB") > -1)
+							continue;
 
-					if (dev.IsSelected)
-					{
-						var cam = Cameras.FirstOrDefault((c) => c.Key.Equals(dev.Id));
-						if (cam != null) SelectedCamera = cam;
+						var existingCam = Cameras.FirstOrDefault((c) => c.Key.Equals(dev.Id));
+						if (existingCam == null)
+						{
+							var displayName = string.IsNullOrEmpty(dev.DisplayName) ? dev.Name : dev.DisplayName;
+							Cameras.Add(new ZoomRoomCamera(dev.Id, displayName, this));
+							this.LogDebug("Added near-end camera id=\"{Id}\" name=\"{Name}\"", dev.Id, displayName);
+						}
+
+						if (dev.IsSelected)
+						{
+							var cam = Cameras.FirstOrDefault((c) => c.Key.Equals(dev.Id));
+							if (cam != null) cameraToSelect = cam;
+						}
 					}
 				}
+
+				// Assign SelectedCamera outside the lock so its feedback/CameraSelected dispatch
+				// doesn't run while _participantLock is held.
+				if (cameraToSelect != null) SelectedCamera = cameraToSelect;
 			}
 
 			if (IsInCall)
