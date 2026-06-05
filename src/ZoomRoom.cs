@@ -878,6 +878,7 @@ namespace PepperDash.Essentials.Plugins
                 Participants.CurrentParticipants = MapParticipants(e.Participants);
                 TrackParticipantInfo(e.Participants, fullReplace: true, isLeave: false);
             }
+            RefreshHostFromParticipants();
             UpdateFarEndCameras();
         }
 
@@ -905,6 +906,7 @@ namespace PepperDash.Essentials.Plugins
                 TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
             }
             Participants.OnParticipantsChanged();
+            RefreshHostFromParticipants();
             UpdateFarEndCameras();
         }
 
@@ -930,6 +932,7 @@ namespace PepperDash.Essentials.Plugins
                 TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: !e.NeedCleanUp);
             }
             Participants.OnParticipantsChanged();
+            RefreshHostFromParticipants();
             UpdateFarEndCameras();
         }
 
@@ -960,6 +963,7 @@ namespace PepperDash.Essentials.Plugins
                 TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
             }
             Participants.OnParticipantsChanged();
+            RefreshHostFromParticipants();
             UpdateFarEndCameras();
         }
 
@@ -967,6 +971,23 @@ namespace PepperDash.Essentials.Plugins
         {
             _sdkIsHost = e.ErrorCode == 1;
             this.LogDebug("HostChanged: isHost={IsHost}", _sdkIsHost);
+            UpdateMeetingInfo();
+        }
+
+        /// <summary>
+        /// Derives this room's host status from the roster (the <c>IsMyself</c> participant's
+        /// <c>IsHost</c> flag). The SDK's HostChanged notification only fires on a host *change*, so
+        /// when the room is host from the start of a meeting it never arrives — this captures it.
+        /// </summary>
+        private void RefreshHostFromParticipants()
+        {
+            bool isHost;
+            lock (_participantLock)
+                isHost = Participants.CurrentParticipants.Any(p => p.IsMyself && p.IsHost);
+
+            if (isHost == _sdkIsHost) return;
+            _sdkIsHost = isHost;
+            this.LogDebug("Host state from roster: isHost={IsHost}", isHost);
             UpdateMeetingInfo();
         }
 
