@@ -2,7 +2,11 @@
 
 Validates the SDK feature-exposure work wired so far on `feature/v3-migration`.
 
-> **Validation status (CP4N, firmware `.116`, SDK `…wrapper-path.20`, 2026-06-05):** the room **pairs, connects, and loads** (after the GLIBCXX toolchain fix). Sections **§1 volume, §2 self-view, §3 layout, §4 sharing-only meeting, §10 single-prominent** are **✅ SDK-accepted** (ran with no `returned failure` warning). Items checked below mean *"command executed and the SDK accepted it"*; where the box notes an on-screen/feedback effect, spot-check it on the room when convenient — the bare bench rig had **no camera, no HDMI source, no calendar, and was solo**, so §5–§9, §11, §12 (and HDMI share) still need an equipped room — see the remaining-commands list at the bottom.
+> **Validation status (CP4N, firmware `.116`, SDK `…wrapper-path.20`):**
+> - **2026-06-05 (solo bench):** room pairs/connects/loads (after the GLIBCXX fix). §1 volume, §2 self-view, §3 layout, §4 sharing-only + share-instruction (§4 `ShowShareInstruction` ✅), §10 single-prominent — all **SDK-accepted**.
+> - **2026-06-05 (3-participant call):** §5 **participant mute + pin** and §8 **expel / assign-host (N1)** validated. Findings: host **unmute is request-only** (popup on the participant; can't be forced); layout/self-view render on the **room display, not the controller app**; the pin toggle was fixed (SDK exposes no pin-state).
+> - **Still needs an equipped room:** camera (§9/§11), HDMI source (§4 HDMI share), calendar (§7), inbound invite (§12). See the remaining-commands list at the bottom.
+> Items checked mean *"command executed and the SDK accepted it"*; spot-check on-screen effects on the room display.
 
 ## Setup
 
@@ -94,6 +98,8 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipPositionSet","params"
 
 ## 3. Layout (F6 + the C6 layout-style fix) — *in a meeting*
 
+> **Where to look:** layout and self-view changes render on the **Zoom Room's own display/TV output** — *not* in the Zoom Room **controller app** UI. In the 2026-06-05 test these were all SDK-accepted (no warnings) but "nothing changed" because the controller-app modal was being watched instead of the room display. Confirm on the room's HDMI/TV output.
+
 **Layout style** (this is the bug fix — Gallery/Speaker should actually switch the layout now, not just reorder tiles):
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["Gallery"]}
@@ -151,34 +157,52 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
 
 ---
 
-## 5. Participant video mute (F2) — *in a meeting, as host, with another participant*
+## 5. Participant audio/video mute + pin (F2) — *in a meeting, as host, with another participant*
+
+> **Validated on CP4N 2026-06-05 (3-participant call).** Key Zoom-model behavior found:
+> - **Mute works directly** (`MuteAudioForParticipant`, `MuteVideoForParticipant`, `MuteAudioForAllParticipants`) ✅.
+> - **Unmute only sends a REQUEST** — the participant gets a popup ("turn on your mic/camera") and must accept. The host **cannot force** unmute. So `UnmuteAudio/VideoForParticipant` and the unmute branch of the toggles won't change the participant's state until they accept — this is Zoom's model, **not a bug**.
+> - Because of that, the **toggles** can mute directly but their "unmute" half is a request. The toggles now log their decision at Debug (`Toggle…ForParticipant: userId=… muted=… -> …`).
 
 First dump the current participants and their userIds to the log:
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"LogParticipants","params":[]}
 ```
-- [ ] Log lists each participant: `userId=… name="…" host=… self=… audioMuted=… videoMuted=… handRaised=…`. Note the `userId` of the participant you want to target (not the one with `self=True` — that's the room).
+- [x] Log lists each participant (`userId=… name="…" host=… self=… audioMuted=… videoMuted=… …`). Target the one **without** `self=True` (that's the room). ✅
 
-Then exercise mute with that userId (replace `<userId>`):
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"MuteVideoForParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"UnmuteVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteAudioForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteAudioForAllParticipants","params":[]}
+```
+- [x] **Direct mute validated** ✅ (CP4N 2026-06-05). Unmute shows the request popup on the participant (expected). Re-run `LogParticipants` to see `audioMuted`/`videoMuted` change once they accept.
+
+```
+devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleAudioForParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","params":[<userId>]}
 ```
-- [ ] The target participant's video mutes / unmutes (host privilege required; the SDK may only allow mute, not force-unmute).
-- [ ] Re-run `LogParticipants` to confirm the target's `videoMuted` flag changed.
+- [x] Toggles read the tracked mute flag and mute-or-request accordingly. *Note:* if the participant is already muted, the toggle issues an **unmute request** (no forced change) — so it can look like it "only unmutes" / "does nothing." Set log level Debug to see the toggle's decision.
 
-> `LogParticipants` is also handy for the audio-mute (`MuteAudioForParticipant`) and pin (`PinUser`) commands if you want to spot-check those too.
+**Pin** (`screenIndex` is the second param):
+```
+devjson {"deviceKey":"zoomRoom-1","methodName":"PinParticipant","params":[<userId>,0]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleParticipantPinState","params":[<userId>,0]}
+```
+- [x] `PinParticipant` SDK-accepted ✅ (CP4N 2026-06-05). **Fixed:** the SDK exposes no per-participant pin state, so `ToggleParticipantPinState` previously always re-pinned and failed (`PinUserOnScreen returned failure`). It now tracks this room's pins locally so it can unpin. *(Pin requires a screen layout that supports pinning; verify on the room display.)*
 
 ---
 
 ## 6. CanRecord (F15) — *observe a feedback, not a command*
 
-`MeetingInfo.CanRecord` is now driven by the SDK (was hardcoded `false`). It's a **feedback**, not a callable method.
-
-- [ ] Join a meeting where this room **is allowed** to record → the **MeetingCanRecord** bridge join goes **true**.
-- [ ] Join a meeting where recording is **not** permitted (or as a non-host where recording is host-only) → **MeetingCanRecord** stays **false**.
-- [ ] Confirm it updates live if the host grants/revokes recording permission mid-meeting.
+`MeetingInfo.CanRecord` is now driven by the SDK (was hardcoded `false`). It's a **feedback**, not a callable command. To read it **from the console** (no bridge/touchpanel needed), use the helper:
+```
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogMeetingInfo","params":[]}
+```
+- [ ] Logs `Meeting info: inCall=… canRecord=… isRecording=… locked=… isHost=…`. Re-run it in different meetings to observe `canRecord`.
+- [ ] Join a meeting where this room **is allowed** to record → `canRecord=True` (and the **MeetingCanRecord** bridge join goes true).
+- [ ] Join a meeting where recording is **not** permitted (or as a non-host where recording is host-only) → `canRecord=False`.
+- [ ] Re-run after the host grants/revokes recording permission mid-meeting → it updates live.
 
 ---
 
@@ -207,8 +231,7 @@ Get userIds via `ZoomRoom.LogParticipants()` (console) first.
 devjson {"deviceKey":"zoomRoom-1","methodName":"RemoveParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetParticipantAsHost","params":[<userId>]}
 ```
-- [ ] Expelled participant actually leaves the meeting; **no** `SDK call ExpelUser returned error code …` Warning.
-- [ ] Host role transfers; **no** `SDK call AssignHost returned error code …` Warning. (Must already be host to do either.)
+- [x] **Validated on CP4N 2026-06-05** — `RemoveParticipant` expelled the target and `SetParticipantAsHost` transferred host, both with no failure warning. (Must be host; do `SetParticipantAsHost` **last** — once host is handed off, this room can no longer expel/assign.)
 
 ## 9. Near-end camera PTZ + auto mode (N2a / N2b) — in a meeting, near-end camera
 
@@ -277,18 +300,9 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"InviteContactById","params":["<c
 
 ## Remaining to validate on a fully-equipped room
 
-The 2026-06-05 CP4N pass cleared everything the bench rig could exercise. The items below still need a **camera-equipped, calendar-linked Zoom Room in a ≥2-participant meeting**, plus an HDMI source and an inbound invite. Grouped by what each needs:
+The 2026-06-05 passes cleared the bench rig **and** a 3-participant call (§5 mute/pin, §8 expel/host ✅). The items below still need hardware the test rig lacks. Grouped by what each needs:
 
-**A ≥2-participant meeting + this room as host** (get userIds from `LogParticipants` first):
-```text
-devjson {"deviceKey":"zoomRoom-1","methodName":"LogParticipants","params":[]}
-devjson {"deviceKey":"zoomRoom-1","methodName":"MuteVideoForParticipant","params":[<userId>]}
-devjson {"deviceKey":"zoomRoom-1","methodName":"UnmuteVideoForParticipant","params":[<userId>]}
-devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","params":[<userId>]}
-devjson {"deviceKey":"zoomRoom-1","methodName":"RemoveParticipant","params":[<userId>]}
-devjson {"deviceKey":"zoomRoom-1","methodName":"SetParticipantAsHost","params":[<userId>]}
-```
-*Also re-confirm the **visible** effect of the already-SDK-accepted layout/self-view commands here (switching, paging, swap, single-prominent, PiP size/position).*
+**A camera-equipped meeting (≥2 participants) on the room display** — re-confirm the **visible** effect of the SDK-accepted layout/self-view commands (layout switching, paging with a *full* page, content swap, single-prominent, PiP size/position) on the **room's TV output** (not the controller app). Gallery **paging** specifically needs more participants than fit one page.
 
 **A local camera attached:**
 ```text
@@ -371,9 +385,15 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StartNormalMeetingFromSharingOnl
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharing","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"LogParticipants","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogMeetingInfo","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"MuteVideoForParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"UnmuteVideoForParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteAudioForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleAudioForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteAudioForAllParticipants","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"PinParticipant","params":[<userId>,0]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleParticipantPinState","params":[<userId>,0]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"GetSchedule","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"RemoveParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetParticipantAsHost","params":[<userId>]}

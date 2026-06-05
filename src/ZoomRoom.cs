@@ -50,6 +50,9 @@ namespace PepperDash.Essentials.Plugins
         // If the SDK adds a HostChanged payload in a future version, populate it there.
         private string _sdkHostName = string.Empty;
         private int  _sdkSharingState; // 0 = not sharing
+        // The ZRC SDK does not expose per-participant pin state, so we track what THIS room pinned
+        // (best-effort) to drive ToggleParticipantPinState. Keyed by userId -> screenIndex.
+        private readonly Dictionary<int, int> _pinnedUserScreens = new Dictionary<int, int>();
         private string _currentMeetingId     = string.Empty;
         private string _currentMeetingNumber = string.Empty;
         private string _currentMeetingName   = string.Empty;
@@ -816,6 +819,7 @@ namespace PepperDash.Essentials.Plugins
             _sdkHostName          = string.Empty;
             _sdkMeetingLocked     = false;
             _sdkIsRecording       = false;
+            _pinnedUserScreens.Clear();
             ActiveCalls.Clear();
             Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
             OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
@@ -2023,6 +2027,18 @@ namespace PepperDash.Essentials.Plugins
             }
         }
 
+        /// <summary>
+        /// Console/test helper: logs current meeting info, including <c>CanRecord</c> (the
+        /// <c>MeetingCanRecord</c> bridge feedback) which is observe-only and has no command.
+        /// Join a recording-permitted vs. not-permitted meeting and re-run to see it change.
+        /// </summary>
+        public void LogMeetingInfo()
+        {
+            this.LogInformation(
+                "Meeting info: inCall={InCall} canRecord={CanRecord} isRecording={IsRecording} locked={Locked} isHost={IsHost}",
+                IsInCall, _sdkCanRecord, _sdkIsRecording, _sdkMeetingLocked, _sdkIsHost);
+        }
+
 		#endregion
 
 		#region IHasParticipantAudioMute Members
@@ -2052,6 +2068,11 @@ namespace PepperDash.Essentials.Plugins
 				return;
 			}
 
+			// NOTE: the host can mute directly, but "unmute" only sends a REQUEST (the participant
+			// gets a popup and must accept). So when the tracked state is muted, this requests an
+			// unmute rather than forcing it — the participant stays muted until they accept.
+			this.LogDebug("ToggleAudioForParticipant: userId={UserId} audioMuted={Muted} -> {Action}",
+				userId, user.AudioMuteFb, user.AudioMuteFb ? "Unmute(request)" : "Mute");
 			if (user.AudioMuteFb)
 			{
 				UnmuteAudioForParticipant(userId);
@@ -2086,6 +2107,10 @@ namespace PepperDash.Essentials.Plugins
 				return;
 			}
 
+			// Same caveat as audio: the host can stop a participant's video directly, but starting it
+			// only sends a REQUEST (popup on the participant). So the unmute branch won't force video on.
+			this.LogDebug("ToggleVideoForParticipant: userId={UserId} videoMuted={Muted} -> {Action}",
+				userId, user.VideoMuteFb, user.VideoMuteFb ? "Unmute(request)" : "Mute");
 			if (user.VideoMuteFb)
 			{
 				UnmuteVideoForParticipant(userId);
@@ -2111,32 +2136,31 @@ namespace PepperDash.Essentials.Plugins
 
 		public void PinParticipant(int userId, int screenIndex)
 		{
-			_controller.PinUserOnScreen(userId, screenIndex);
+			// Track on success so ToggleParticipantPinState can later unpin (the SDK exposes no
+			// per-participant pin state of its own).
+			if (_controller.PinUserOnScreen(userId, screenIndex))
+				_pinnedUserScreens[userId] = screenIndex;
 		}
 
 		public void UnPinParticipant(int userId)
 		{
-			_controller.UnpinUserFromScreen(userId, 0);
+			var screen = _pinnedUserScreens.TryGetValue(userId, out var s) ? s : 0;
+			if (_controller.UnpinUserFromScreen(userId, screen))
+				_pinnedUserScreens.Remove(userId);
 		}
 
 		public void ToggleParticipantPinState(int userId, int screenIndex)
 		{
-			var user = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId.Equals(userId));
-
-			if (user == null)
-			{
-				this.LogDebug("Unable to find user with id: {UserId}", userId);
-				return;
-			}
-
-			if (user.IsPinnedFb)
-			{
+			// SDK gives no pin-state feedback, so toggle off our own tracked set rather than the
+			// always-false IsPinnedFb (which made the toggle always re-pin and fail on an
+			// already-pinned user).
+			var pinned = _pinnedUserScreens.ContainsKey(userId);
+			this.LogDebug("ToggleParticipantPinState: userId={UserId} pinned(tracked)={Pinned} -> {Action}",
+				userId, pinned, pinned ? "Unpin" : "Pin");
+			if (pinned)
 				UnPinParticipant(userId);
-			}
 			else
-			{
 				PinParticipant(userId, screenIndex);
-			}
 		}
 
 		#endregion
