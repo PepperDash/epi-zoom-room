@@ -126,7 +126,16 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Laptop"]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Ios"]}
 ```
-- [x] **Validated on CP4N 2026-06-05** — SDK-accepted, and the room actually transitioned `ConnectingToMeeting → InMeeting`. *Confirm the `Laptop`/`Ios` instruction overlays on the room display.*
+- [x] **Validated on CP4N 2026-06-05** — SDK-accepted, and the room actually transitioned `ConnectingToMeeting → InMeeting`.
+  > **Finding:** the `Laptop`/`Ios` param is the SDK's `LaunchSharingMeeting` *"init display state"* only — on 4-series firmware the overlay **always opens on Desktop** regardless of the param (the value reaches the SDK correctly as `IOS=2`; the SDK just doesn't render it at launch). To switch the live instruction, use **`ShowShareInstruction`** below.
+
+**Switch the live instruction overlay** — *while in a sharing-only meeting* (this is the call that actually selects the tab):
+```
+devjson {"deviceKey":"zoomRoom-1","methodName":"ShowShareInstruction","params":["Ios"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ShowShareInstruction","params":["Laptop"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"DismissShareInstruction","params":[]}
+```
+- [x] **Validated on CP4N 2026-06-05** — `Ios` switches the room screen to the **iPhone/iPad** tab, `Laptop` back to **Desktop**, `DismissShareInstruction` hides the overlay. No SDK failure.
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartNormalMeetingFromSharingOnlyMeeting","params":[]}
 ```
@@ -335,6 +344,9 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"SwapContentWithThumbnail","param
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Laptop"]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Ios"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ShowShareInstruction","params":["Ios"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ShowShareInstruction","params":["Laptop"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"DismissShareInstruction","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartNormalMeetingFromSharingOnlyMeeting","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharing","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}

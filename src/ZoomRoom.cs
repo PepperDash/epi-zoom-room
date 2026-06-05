@@ -2662,8 +2662,11 @@ namespace PepperDash.Essentials.Plugins
 
 	    public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration, string password)
 	    {
-            // The SDK launches a sharing-only ("local presentation") meeting with the chosen instruction
-            // overlay. duration/password have no equivalent on LaunchSharingMeeting and are not used.
+            // Launches a sharing-only ("local presentation") meeting. NOTE: the SDK treats displayMode
+            // as the LaunchSharingMeeting "init display state" only — on 4-series firmware the overlay
+            // always opens on Desktop regardless. To switch the live instruction (Desktop/iPhone-iPad),
+            // call ShowShareInstruction(mode) once the meeting is up. duration/password have no SDK
+            // equivalent and are ignored.
             if (duration != 0 || !string.IsNullOrEmpty(password))
                 this.LogDebug("StartSharingOnlyMeeting: duration/password are not supported by the SDK and are ignored");
             _controller.LaunchSharingMeeting(true, SharingModeToSdk(displayMode));
@@ -2672,6 +2675,24 @@ namespace PepperDash.Essentials.Plugins
 	    public void StartNormalMeetingFromSharingOnlyMeeting()
 	    {
             _controller.SwitchFromLocalPresentationToNormalMeeting();
+	    }
+
+	    /// <summary>
+	    /// Shows the sharing-instruction overlay for the given mode on the room screen
+	    /// (Laptop → Desktop tab, Ios → iPhone/iPad tab). Use this to switch the displayed
+	    /// instruction while in a sharing-only meeting — the SDK's <c>LaunchSharingMeeting</c>
+	    /// "init display state" does not change the live overlay (it always opens Desktop), so
+	    /// <c>ShowSharingInstruction</c> is the call that actually selects the tab.
+	    /// </summary>
+	    public void ShowShareInstruction(eSharingMeetingMode mode)
+	    {
+            _controller.ShowSharingInstruction(true, SharingModeToSdk(mode));
+	    }
+
+	    /// <summary>Dismisses the sharing-instruction overlay on the room screen.</summary>
+	    public void DismissShareInstruction()
+	    {
+            _controller.ShowSharingInstruction(false, 0);
 	    }
 
 	    // Maps Essentials eSharingMeetingMode -> ZRC SDK SharingInstructionDisplayState int.
