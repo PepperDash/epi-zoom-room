@@ -5,7 +5,8 @@ Validates the SDK feature-exposure work wired so far on `feature/v3-migration`.
 > **Validation status (CP4N, firmware `.116`, SDK `…wrapper-path.20`):**
 > - **2026-06-05 (solo bench):** room pairs/connects/loads (after the GLIBCXX fix). §1 volume, §2 self-view, §3 layout, §4 sharing-only + share-instruction (§4 `ShowShareInstruction` ✅), §10 single-prominent — all **SDK-accepted**.
 > - **2026-06-05 (3-participant call):** §5 **participant mute + pin** and §8 **expel / assign-host (N1)** validated. Findings: host **unmute is request-only** (popup on the participant; can't be forced); layout/self-view render on the **room display, not the controller app**; the pin toggle was fixed (SDK exposes no pin-state).
-> - **Still needs an equipped room:** camera (§9/§11), HDMI source (§4 HDMI share), calendar (§7), inbound invite (§12). See the remaining-commands list at the bottom.
+> - **2026-06-05 (redeploy, commit `0f3d197`):** §6 **CanRecord** + **isHost** validated (`LogMeetingInfo`: idle→hosting flips both to true); §13 **LogDirectory** + **InviteContactById** (idle→new-meeting) validated. Gotcha: host-control ops (pin/mute) can't target the room itself — in a solo meeting the only userId is `self` and they all fail; use a `self=False` participant.
+> - **Still needs an equipped room:** camera (§9/§11), HDMI source (§4 HDMI share), calendar (§7), inbound invite (§12), and pin/mute against a **real 2nd participant** (§5). See the remaining-commands list at the bottom.
 > Items checked mean *"command executed and the SDK accepted it"*; spot-check on-screen effects on the room display.
 
 ## Setup
@@ -163,6 +164,7 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
 > - **Mute works directly** (`MuteAudioForParticipant`, `MuteVideoForParticipant`, `MuteAudioForAllParticipants`) ✅.
 > - **Unmute only sends a REQUEST** — the participant gets a popup ("turn on your mic/camera") and must accept. The host **cannot force** unmute. So `UnmuteAudio/VideoForParticipant` and the unmute branch of the toggles won't change the participant's state until they accept — this is Zoom's model, **not a bug**.
 > - Because of that, the **toggles** can mute directly but their "unmute" half is a request. The toggles now log their decision at Debug (`Toggle…ForParticipant: userId=… muted=… -> …`).
+> - **Target a REAL other participant.** Host controls can't target the room itself — pinning/muting the `self=True` userId fails at the SDK (`PinUserOnScreen / MuteUserAudio / MuteUserVideo returned failure`). In a solo meeting the only userId IS the room, so these all fail; that's expected. Use a userId with `self=False`.
 
 First dump the current participants and their userIds to the log:
 ```
@@ -189,7 +191,7 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","para
 devjson {"deviceKey":"zoomRoom-1","methodName":"PinParticipant","params":[<userId>,0]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleParticipantPinState","params":[<userId>,0]}
 ```
-- [x] `PinParticipant` SDK-accepted ✅ (CP4N 2026-06-05). **Fixed:** the SDK exposes no per-participant pin state, so `ToggleParticipantPinState` previously always re-pinned and failed (`PinUserOnScreen returned failure`). It now tracks this room's pins locally so it can unpin. *(Pin requires a screen layout that supports pinning; verify on the room display.)*
+- [ ] **Toggle logic fixed** — the SDK exposes no per-participant pin state, so `ToggleParticipantPinState` used to always re-pin and fail; it now tracks this room's pins locally so it can unpin. **Still to confirm with a real target:** on CP4N 2026-06-05 `PinUserOnScreen returned failure`, but the only participant was the room itself (`self`) — pin can't target self. Retest against a `self=False` participant; pin may also require a screen layout/display that supports pinning.
 
 ---
 
@@ -199,10 +201,10 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleParticipantPinState","para
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"LogMeetingInfo","params":[]}
 ```
-- [ ] Logs `Meeting info: inCall=… canRecord=… isRecording=… locked=… isHost=…`. Re-run it in different meetings to observe `canRecord`.
-- [ ] Join a meeting where this room **is allowed** to record → `canRecord=True` (and the **MeetingCanRecord** bridge join goes true).
-- [ ] Join a meeting where recording is **not** permitted (or as a non-host where recording is host-only) → `canRecord=False`.
-- [ ] Re-run after the host grants/revokes recording permission mid-meeting → it updates live.
+- [x] Logs `Meeting info: inCall=… canRecord=… isRecording=… locked=… isHost=…`. ✅ CP4N 2026-06-05.
+- [x] **CanRecord validated** ✅ — `canRecord=False` idle → `canRecord=True` once hosting a recordable meeting.
+- [x] **isHost validated** ✅ — `isHost=False` idle → `isHost=True` when hosting (the roster-derived host fix, commit `0f3d197`; previously stuck false because the SDK's HostChanged fires only on a *change*).
+- [ ] (Optional) Re-run after a non-host context / after the host revokes recording mid-meeting → confirm `canRecord` updates live.
 
 ---
 
@@ -284,14 +286,14 @@ First dump the directory to get a `contactId`:
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"LogDirectory","params":[]}
 ```
-- [ ] Log lists each contact: `contactId="…" name="…" email="…" sip="…"`. Copy a real `contactId`.
+- [x] **Validated** ✅ CP4N 2026-06-05 — lists each contact `contactId="…" name="…" email="…" sip="…"`. Copy a real `contactId`.
 
 Then invite by ID (replace `<contactId>`). Routing matches the touchpanel `Dial(contact)` path: **in a meeting → invites to it**; **idle → starts a new meeting with them**:
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"InviteContactById","params":["<contactId>"]}
 ```
-- [ ] **From idle** → a new meeting starts and the target contact is rung/invited; **no** `SDK call MeetWithIMUsers returned error code …` Warning.
-- [ ] **While in a meeting** → the contact is invited to the current meeting; **no** `SDK call InviteAttendees returned error code …` Warning.
+- [x] **From idle → MeetWithImUsers validated** ✅ CP4N 2026-06-05 — `Starting a new meeting with contact …` → ConnectingToMeeting → InMeeting, no failure warning.
+- [ ] **While in a meeting** → the contact is invited to the current meeting (`InviteAttendees`); no failure warning. *(still to confirm — exercise from inside a meeting)*
 - [ ] Confirm on the **target** device/user that the invite actually arrives. (An unknown ID logs `not in the downloaded directory — sending anyway`.)
 
 > Production UI path (touchpanel/bridge) uses `Dial(IInvitableContact)` / `InviteContactsToNewMeeting` / `InviteContactsToExistingMeeting` with real contact objects — exercise those via the bridge if available. `LogDirectory`/`InviteContactById` are CLI test shims over the same `InviteAttendees`/`MeetWithImUsers` controller calls.
