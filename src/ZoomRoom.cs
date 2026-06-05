@@ -1540,6 +1540,67 @@ namespace PepperDash.Essentials.Plugins
                 .ToArray();
         }
 
+        /// <summary>
+        /// Console/test helper: dumps the downloaded directory contacts with their contact IDs to the
+        /// log, so a `contactId` can be copied for <see cref="InviteContactById"/>. Mirrors
+        /// <see cref="LogParticipants"/>. The directory auto-downloads on connect.
+        /// </summary>
+        public void LogDirectory()
+        {
+            List<ContactInfo> snapshot;
+            lock (_directoryLock) snapshot = _directoryContactsById.Values.ToList();
+
+            if (snapshot.Count == 0)
+            {
+                this.LogInformation("Directory: (empty — not yet downloaded, or phonebook auto-download disabled)");
+                return;
+            }
+
+            this.LogInformation("Directory ({Count}):", snapshot.Count);
+            foreach (var c in snapshot)
+            {
+                this.LogInformation(
+                    "  contactId=\"{ContactId}\" name=\"{Name}\" email=\"{Email}\" sip=\"{Sip}\"",
+                    c.ContactID,
+                    string.IsNullOrEmpty(c.ScreenName) ? string.Format("{0} {1}", c.FirstName, c.LastName).Trim() : c.ScreenName,
+                    c.Email, c.SipPhoneNumber);
+            }
+        }
+
+        /// <summary>
+        /// Console/test helper: invites a directory contact by its <paramref name="contactId"/>. If this
+        /// room is in a meeting the contact is invited to it (<c>InviteAttendees</c>); otherwise a new
+        /// meeting is started with them (<c>MeetWithImUsers</c>) — same routing as
+        /// <see cref="Dial(IInvitableContact)"/>, but callable from the console with a plain string.
+        /// Get IDs from <see cref="LogDirectory"/>.
+        /// </summary>
+        public void InviteContactById(string contactId)
+        {
+            if (!EnsureConnected("InviteContactById")) return;
+            if (string.IsNullOrEmpty(contactId))
+            {
+                this.LogWarning("InviteContactById: no contactId supplied");
+                return;
+            }
+
+            bool known;
+            lock (_directoryLock) known = _directoryContactsById.ContainsKey(contactId);
+            if (!known)
+                this.LogWarning("InviteContactById: {ContactId} not in the downloaded directory — sending anyway", contactId);
+
+            var ids = new[] { contactId };
+            if (IsInCall)
+            {
+                this.LogInformation("Inviting contact {ContactId} to the current meeting", contactId);
+                _controller.InviteAttendees(ids);
+            }
+            else
+            {
+                this.LogInformation("Starting a new meeting with contact {ContactId}", contactId);
+                _controller.MeetWithImUsers(ids);
+            }
+        }
+
 
         /// <summary>
         /// Starts a PMI Meeting for the specified duration (or default meeting duration if 0 is specified)

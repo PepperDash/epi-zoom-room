@@ -253,6 +253,26 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
 - [ ] The local call status flips to **Disconnected** and the UI clears.
 - [ ] (Accept path unchanged) `AcceptCall` still joins via meeting number — confirm it still works.
 
+## 13. Directory + invite-by-contact (R-D / R-C)
+
+The directory **auto-downloads on connect** (validated: `Directory updated: N contact(s)`). The invite methods take `InvitableDirectoryContact` objects (driven by the touchpanel/bridge in production), which `devjson` can't construct — so use these **console helpers** to test from the CLI.
+
+First dump the directory to get a `contactId`:
+```
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogDirectory","params":[]}
+```
+- [ ] Log lists each contact: `contactId="…" name="…" email="…" sip="…"`. Copy a real `contactId`.
+
+Then invite by ID (replace `<contactId>`). Routing matches the touchpanel `Dial(contact)` path: **in a meeting → invites to it**; **idle → starts a new meeting with them**:
+```
+devjson {"deviceKey":"zoomRoom-1","methodName":"InviteContactById","params":["<contactId>"]}
+```
+- [ ] **From idle** → a new meeting starts and the target contact is rung/invited; **no** `SDK call MeetWithIMUsers returned error code …` Warning.
+- [ ] **While in a meeting** → the contact is invited to the current meeting; **no** `SDK call InviteAttendees returned error code …` Warning.
+- [ ] Confirm on the **target** device/user that the invite actually arrives. (An unknown ID logs `not in the downloaded directory — sending anyway`.)
+
+> Production UI path (touchpanel/bridge) uses `Dial(IInvitableContact)` / `InviteContactsToNewMeeting` / `InviteContactsToExistingMeeting` with real contact objects — exercise those via the bridge if available. `LogDirectory`/`InviteContactById` are CLI test shims over the same `InviteAttendees`/`MeetWithImUsers` controller calls.
+
 ---
 
 ## Remaining to validate on a fully-equipped room
@@ -363,6 +383,8 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeToggle","params":[
 devjson {"deviceKey":"zoomRoom-1","methodName":"LocalLayoutToggleSingleProminent","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelectCamera","params":["<deviceId>"]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogDirectory","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"InviteContactById","params":["<contactId>"]}
 ```
 
 ---
