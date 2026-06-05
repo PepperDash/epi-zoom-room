@@ -645,13 +645,17 @@ namespace PepperDash.Essentials.Plugins
 
         private void OnControllerConnectionStateChanged(object sender, SdkEventArgs e)
         {
-            var connected = e.ErrorCode == (int)ConnectionState.Established || e.ErrorCode == (int)ConnectionState.Connected;
-            this.LogInformation("SDK connection state changed: {State} ({Code})", (ConnectionState)e.ErrorCode, e.ErrorCode);
+            var state = (ConnectionState)e.ErrorCode;
+            var online = state == ConnectionState.Established || state == ConnectionState.Connected;
+            this.LogInformation("SDK connection state changed: {State} ({Code})", state, e.ErrorCode);
 
-            _isConnected = connected;
-            ((SdkConnectionMonitor)CommunicationMonitor).SetOnline(connected);
+            _isConnected = online;
+            ((SdkConnectionMonitor)CommunicationMonitor).SetOnline(online);
 
-            if (connected)
+            // Fetch initial data only once fully Connected. At Established the SDK service helpers
+            // (contacts, meeting list, settings) aren't ready yet, so these calls return failure;
+            // the Connected event that follows pairing is when they succeed.
+            if (state == ConnectionState.Connected)
             {
                 SeedSpeakerVolume();
 
@@ -671,7 +675,7 @@ namespace PepperDash.Essentials.Plugins
                 this.LogInformation("Requesting meeting schedule (bookings)");
                 _controller.ListMeeting();
             }
-            else
+            else if (!online)
             {
                 // Reset in-call state on disconnect
                 ActiveCalls.Clear();

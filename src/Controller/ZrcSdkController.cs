@@ -36,7 +36,25 @@ namespace PepperDash.Essentials.Plugins
             // there via ZrcSdk.SetLibraryPath before constructing the SDK.
             StageNativeWrapper();
 
-            _sdk = new ZrcSdk();
+            // Diagnostic: the wrapper has failed to dlopen on some firmware with "GLIBCXX_x not
+            // found". Log the device's actual libstdc++/glibc symbol-version ceilings so we can
+            // target a compatible cross-compile toolchain. Runs before SDK creation so it's logged
+            // even when the load below throws.
+            LogNativeRuntimeCeilings();
+
+            try
+            {
+                _sdk = new ZrcSdk();
+            }
+            catch (Exception ex)
+            {
+                // Constructing the SDK loads/initializes the native wrapper. If that fails the
+                // factory's static Serilog logger is invisible (separate plugin load context), so
+                // the device just vanishes with a generic "unknown device type". Log via the IKeyed
+                // channel (reaches the Essentials log) before letting it propagate.
+                this.LogError(ex, "Failed to create ZRC SDK — native wrapper load/init failed; device will not load. {Message}", ex.Message);
+                throw;
+            }
 
             // Dispose on program stop — mirrors the ControlSystem example
             CrestronEnvironment.ProgramStatusEventHandler += OnProgramStatusEvent;
@@ -98,6 +116,42 @@ namespace PepperDash.Essentials.Plugins
                     "Failed to stage native wrapper '{File}': {Message}",
                     NativeWrapperFileName, ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Reads the device's C++ runtime / glibc shared objects directly (no shell) and logs the
+        /// highest <c>GLIBCXX_*</c> and <c>GLIBC_*</c> symbol versions they provide. This is the
+        /// compatibility ceiling the cross-compiled wrapper must stay at or below. Best-effort.
+        /// </summary>
+        private void LogNativeRuntimeCeilings()
+        {
+            try
+            {
+                foreach (var p in new[] { "/usr/lib/libstdc++.so.6", "/lib/libstdc++.so.6" })
+                    if (File.Exists(p)) { LogMaxSymbolVersion(p, "GLIBCXX_"); break; }
+
+                foreach (var p in new[] { "/lib/libc.so.6", "/usr/lib/libc.so.6", "/lib/arm-linux-gnueabihf/libc.so.6" })
+                    if (File.Exists(p)) { LogMaxSymbolVersion(p, "GLIBC_"); break; }
+            }
+            catch (Exception ex)
+            {
+                this.LogWarning("Could not read device C++/glibc runtime versions: {Message}", ex.Message);
+            }
+        }
+
+        private void LogMaxSymbolVersion(string path, string prefix)
+        {
+            var text = System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(path));
+            Version max = null; string maxStr = null;
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                         text, System.Text.RegularExpressions.Regex.Escape(prefix) + @"([0-9]+(?:\.[0-9]+)+)"))
+            {
+                if (Version.TryParse(m.Groups[1].Value, out var v) && (max == null || v > max))
+                {
+                    max = v; maxStr = m.Value;
+                }
+            }
+            this.LogInformation("Runtime check: {Path} provides up to {Max}", path, maxStr ?? "(none found)");
         }
 
         private void OnProgramStatusEvent(eProgramStatusEventType eventType)
