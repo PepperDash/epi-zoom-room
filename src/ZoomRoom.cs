@@ -923,10 +923,12 @@ namespace PepperDash.Essentials.Plugins
                     {
                         var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
                         if (existing == null)
-                        {
-                            var p = MapParticipant(info);
-                            Participants.CurrentParticipants.Add(p);
-                        }
+                            Participants.CurrentParticipants.Add(MapParticipant(info));
+                        else
+                            // The SDK re-sends a participant via UserJoined when their role changes
+                            // (e.g. a co-host promotion arrives this way, not via UserUpdated), so an
+                            // already-present participant must be updated in place, not ignored.
+                            UpdateParticipantFrom(existing, info);
                     }
                 }
                 TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
@@ -978,14 +980,7 @@ namespace PepperDash.Essentials.Plugins
                     {
                         var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
                         if (existing != null)
-                        {
-                            existing.Name           = info.UserName;
-                            existing.IsHost         = info.IsHost;
-                            existing.IsCohost       = info.IsCohost;
-                            existing.AudioMuteFb    = info.AudioMuted;
-                            existing.VideoMuteFb    = !info.VideoSending;
-                            existing.HandIsRaisedFb = info.HandRaised;
-                        }
+                            UpdateParticipantFrom(existing, info);
                     }
                 }
                 TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
@@ -1074,6 +1069,22 @@ namespace PepperDash.Essentials.Plugins
                 HandIsRaisedFb = info.HandRaised,
                 // IsPinnedFb: SDK does not expose per-participant pin state; defaults to false.
             };
+        }
+
+        /// <summary>
+        /// Updates an existing roster <see cref="Participant"/> in place from a fresh
+        /// <see cref="ParticipantInfo"/>. Shared by the UserJoined (role re-send) and UserUpdated
+        /// handlers so both apply the same mutable fields (role, mute, hand). UserId/IsMyself are
+        /// identity and never change for a given roster entry, so they are left untouched.
+        /// </summary>
+        private static void UpdateParticipantFrom(Participant existing, ParticipantInfo info)
+        {
+            existing.Name           = info.UserName;
+            existing.IsHost         = info.IsHost;
+            existing.IsCohost       = info.IsCohost;
+            existing.AudioMuteFb    = info.AudioMuted;
+            existing.VideoMuteFb    = !info.VideoSending;
+            existing.HandIsRaisedFb = info.HandRaised;
         }
 
 
