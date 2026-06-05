@@ -2162,6 +2162,19 @@ namespace PepperDash.Essentials.Plugins
                 IsInCall, _sdkCanRecord, _sdkIsRecording, _sdkMeetingLocked, _sdkIsHost);
         }
 
+        /// <summary>
+        /// Console test shim: logs the room's current speaker volume (the value behind
+        /// <c>VolumeLevelFeedback</c>) so the seed-on-reconnect behavior can be verified from the
+        /// CLI without a bridge/touchpanel. After setting a volume and rebooting, this should report
+        /// the room's current level rather than 0.
+        /// </summary>
+        public void LogVolume()
+        {
+            this.LogInformation(
+                "Volume: level={Level} (0-65535) muted={Muted}",
+                _sdkSpeakerVolumeLevel, _sdkSpeakerMuted);
+        }
+
 		#endregion
 
 		// Host controls (mute / video / pin) target OTHER participants. Resolves the live participant

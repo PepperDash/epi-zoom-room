@@ -64,7 +64,13 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeUp","params":[true]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeDown","params":[true]}
 ```
 - [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm each call steps ~5%.* (`params` must be `[true]` — the press flag.)
-- [ ] On reconnect, **VolumeLevelFeedback** seeds to the room's current volume (set volume, reboot/redeploy, confirm feedback matches). *(reboot test — not yet run)*
+- [ ] On reconnect, **VolumeLevelFeedback** seeds to the room's current volume. *(reboot test — not yet run.)* Console-doable: set a distinctive level, reboot/redeploy, then read it back with the `LogVolume` shim — it should report the room's current level, not 0:
+  ```
+  devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[32768]}
+     (reboot / redeploy, wait for the room to reconnect)
+  devjson {"deviceKey":"zoomRoom-1","methodName":"LogVolume","params":[]}
+  ```
+  Expect `Volume: level=~32768 (0-65535) muted=False`.
 
 ---
 
@@ -391,6 +397,7 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharing","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"LogParticipants","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"LogMeetingInfo","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogVolume","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"MuteVideoForParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"UnmuteVideoForParticipant","params":[<userId>]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","params":[<userId>]}
