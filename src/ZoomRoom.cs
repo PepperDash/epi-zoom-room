@@ -897,6 +897,7 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerParticipantsInitialized(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
+            LogIncomingParticipantRoles("ParticipantsInitialized", e);
             lock (_participantLock)
             {
                 Participants.CurrentParticipants = MapParticipants(e.Participants);
@@ -909,6 +910,7 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerUserJoined(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
+            LogIncomingParticipantRoles("UserJoined", e);
             lock (_participantLock)
             {
                 if (e.NeedCleanUp)
@@ -963,6 +965,7 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerUserUpdated(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
+            LogIncomingParticipantRoles("UserUpdated", e);
             lock (_participantLock)
             {
                 if (e.NeedCleanUp)
@@ -1014,6 +1017,17 @@ namespace PepperDash.Essentials.Plugins
             _sdkIsHost = isHost;
             this.LogDebug("Host state from roster: isHost={IsHost}", isHost);
             UpdateMeetingInfo();
+        }
+
+        // Diagnostic (Debug): logs the raw role flags the SDK delivers for each participant in a
+        // participant event. Used to confirm whether co-host promotions actually arrive over the
+        // participant feed (vs. only via a no-data "participants changed" signal).
+        private void LogIncomingParticipantRoles(string source, ParticipantListEventArgs e)
+        {
+            if (e?.Participants == null) return;
+            foreach (var info in e.Participants)
+                this.LogDebug("{Source}: userId={UserId} name=\"{Name}\" isHost={IsHost} isCohost={IsCohost} isAltHost={IsAltHost} userType={UserType} cleanup={Cleanup}",
+                    source, info.UserID, info.UserName, info.IsHost, info.IsCohost, info.IsOriginalOrAlternativeHost, info.UserType, e.NeedCleanUp);
         }
 
         private void OnControllerSharingStatusChanged(object sender, SharingStatusEventArgs e)

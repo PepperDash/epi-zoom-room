@@ -205,7 +205,8 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"LogMeetingInfo","params":[]}
 - [x] Logs `Meeting info: inCall=… canRecord=… isRecording=… locked=… isHost=…`. ✅ CP4N 2026-06-05.
 - [x] **CanRecord validated** ✅ — `canRecord=False` idle → `canRecord=True` once hosting a recordable meeting.
 - [x] **isHost validated** ✅ — `isHost=False` idle → `isHost=True` when hosting (the roster-derived host fix, commit `0f3d197`; previously stuck false because the SDK's HostChanged fires only on a *change*).
-- [ ] (Optional) Re-run after a non-host context / after the host revokes recording mid-meeting → confirm `canRecord` updates live.
+
+> **What `canRecord` means (and what it does NOT):** `canRecord` maps the SDK's `MeetingRecordingInfo.canIRecord` — *"**this room** can start recording"* (the room's own ability). A **host can always record**, so for a host `canRecord=True` and it **won't change** when you toggle the **"Record to computer" Host-tools switch** — that switch is a *participant* permission (`RecordingPermissionTypeLocalRecording`), not the host's own ability. Observed on CP4N 2026-06-05: toggling "Record to computer" off left `canRecord=True` — **expected, not a bug.** The participant recording-*permission* states (local-record / request-local / request-cloud, enable+lock) are delivered by `OnUpdateRecordingPermission`, which the wrapper does **not** currently surface — that would be a separate feature if the client needs the permission toggles reflected.
 
 ---
 

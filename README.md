@@ -70,4 +70,9 @@ The plugin registers the following console commands (operator access level):
 | `unpairZoomRoom` | Unpair from the Zoom Room. |
 | `forceRepairZoom` | Clear stored credentials and re-pair using the activation code from configuration. Use this after rotating the activation code, when stored credentials would otherwise be reused. |
 
+## Behavior notes
+
+### `MeetingInfo.CanRecord`
+`CanRecord` reflects the ZRC SDK's `MeetingRecordingInfo.canIRecord` — **whether _this room_ can start recording** (the room's own ability). Because a **host can always record**, `CanRecord` stays `true` while the room is host and **does not track the "Record to computer" switch in Zoom's Host-tools menu**. That switch is a *participant* permission (`RecordingPermissionTypeLocalRecording`) governing whether attendees may record locally — it is not the room's own ability, and the plugin does not currently surface the participant recording-permission states. (Toggling it off while hosting will not change `CanRecord`; this is expected.)
+
 > **Note:** Crestron console command names cannot be a complete prefix of another registered command, so the force re-pair command is named `forceRepairZoom` rather than `repairZoomRoomConfig` (which would collide with `repairZoomRoom`).
