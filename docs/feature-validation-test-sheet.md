@@ -6,7 +6,8 @@ Validates the SDK feature-exposure work wired so far on `feature/v3-migration`.
 > - **2026-06-05 (solo bench):** room pairs/connects/loads (after the GLIBCXX fix). §1 volume, §2 self-view, §3 layout, §4 sharing-only + share-instruction (§4 `ShowShareInstruction` ✅), §10 single-prominent — all **SDK-accepted**.
 > - **2026-06-05 (3-participant call):** §5 **participant mute + pin** and §8 **expel / assign-host (N1)** validated. Findings: host **unmute is request-only** (popup on the participant; can't be forced); layout/self-view render on the **room display, not the controller app**; the pin toggle was fixed (SDK exposes no pin-state).
 > - **2026-06-05 (2-participant call, commits `0f3d197`/`1650801`):** §5 **pin + mute against a real participant** ✅ and the **self/invalid-target guard** ✅; §6 **CanRecord + isHost** ✅; §13 **invite by contact** both paths ✅ (idle→new meeting *and* in-meeting→InviteAttendees). All devjson-testable features on a camera-less/calendar-less rig are now validated.
-> - **Still needs equipment the bench lacks:** camera (§9/§11), HDMI source (§4 HDMI share), calendar (§7), and an **inbound invite ringing this room** (§12 RejectCall).
+> - **2026-06-05 (inbound invite):** §12 **RejectCall** ✅ — invite surfaced as a ringing call and declined.
+> - **Still needs equipment the bench lacks (only these remain):** camera (§9/§11 — CameraAutoMode/SelectCamera/near-end PTZ), HDMI source (§4 HDMI share), calendar (§7 GetSchedule).
 > Items checked mean *"command executed and the SDK accepted it"*; spot-check on-screen effects on the room display.
 
 ## Setup
@@ -269,14 +270,15 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"SelectCamera","params":["<device
 
 ## 12. RejectCall — decline an incoming meeting invite (N4) — needs an inbound invite
 
+> **Fix (commit `b8981e5`):** an inbound invite now surfaces as a Ringing/Incoming `ActiveCall`, so the parameterless `RejectCall()`/`AcceptCall()` (and touchpanel incoming-call UI) act on it. Previously they scanned `ActiveCalls`, found nothing, and silently no-op'd. `AcceptCall` answers via `AnswerMeetingInvite(true)` (no meeting number in the invite event); `RejectCall` via `AnswerMeetingInvite(false)`.
+
 Have another Zoom client/room **invite this room** so an incoming call is ringing, then:
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
 ```
-- [ ] The invite is **declined on the caller's side** (the caller sees the room declined), not just cleared locally; **no** `SDK call AnswerMeetingInvite returned error code …` Warning.
-- [ ] With **no** pending invite, RejectCall logs `No pending meeting invite` (error -2) — expected, harmless.
-- [ ] The local call status flips to **Disconnected** and the UI clears.
-- [ ] (Accept path unchanged) `AcceptCall` still joins via meeting number — confirm it still works.
+- [x] **Validated on CP4N 2026-06-05** ✅ — `MeetingInvite received from "Anthony Lopez"` on arrival, then `RejectCall` **declined the call** (no `AnswerMeetingInvite returned failure`).
+- [ ] (Optional) `AcceptCall` on a ringing invite → joins the meeting via `AnswerMeetingInvite(true)`.
+- [ ] (Optional) With **no** pending invite, RejectCall → native `No pending meeting invite` (-2) → harmless `returned failure` log.
 
 ## 13. Directory + invite-by-contact (R-D / R-C)
 
