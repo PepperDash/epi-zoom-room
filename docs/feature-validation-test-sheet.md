@@ -251,6 +251,58 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
 
 ---
 
+## Appendix — All `devjson` commands (one-click copy)
+
+Every command from the sheet above, in section order. Replace `<userId>` / `<deviceId>` placeholders before running, and adjust `deviceKey` if your config differs.
+
+```text
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[0]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[16384]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[32768]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[49152]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[65535]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteOn","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteOff","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteToggle","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeUp","params":[true]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeDown","params":[true]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfViewModeToggle","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfViewModeOff","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfViewModeOn","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipSizeToggle","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipPositionToggle","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipSizeSet","params":[{"command":"Size2","label":"Size 2"}]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipPositionSet","params":[{"command":"DownRight","label":"Lower Right"}]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["Gallery"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["Speaker"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["Strip"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["ShareAll"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LayoutTurnNextPage","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LayoutTurnPreviousPage","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SwapContentWithThumbnail","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Laptop"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Ios"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StartNormalMeetingFromSharingOnlyMeeting","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharing","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogParticipants","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"UnmuteVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"GetSchedule","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"RemoveParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetParticipantAsHost","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeOn","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeOff","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeToggle","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"LocalLayoutToggleSingleProminent","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelectCamera","params":["<deviceId>"]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
+```
+
+---
+
 ## Notes / issues found
 
 > Record anything that doesn't match expected here (command, what happened, what you expected). The volume **range** is already confirmed (0–255). Most likely places for surprises: layout-style int mapping (Strip/ShareAll), self-view size/position enum mapping, and the share-instruction display states.
