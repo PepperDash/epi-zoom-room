@@ -2,9 +2,12 @@
 
 Validates the SDK feature-exposure work wired so far on `feature/v3-migration`.
 
+> **Validation status (CP4N, firmware `.116`, SDK `…wrapper-path.20`, 2026-06-05):** the room **pairs, connects, and loads** (after the GLIBCXX toolchain fix). Sections **§1 volume, §2 self-view, §3 layout, §4 sharing-only meeting, §10 single-prominent** are **✅ SDK-accepted** (ran with no `returned failure` warning). Items checked below mean *"command executed and the SDK accepted it"*; where the box notes an on-screen/feedback effect, spot-check it on the room when convenient — the bare bench rig had **no camera, no HDMI source, no calendar, and was solo**, so §5–§9, §11, §12 (and HDMI share) still need an equipped room — see the remaining-commands list at the bottom.
+
 ## Setup
 
-- **Build/deploy** the current `feature/v3-migration` plugin (SDK ref `…wrapper-path.7`) to the test processor (`.116`) and confirm the room **pairs and connects**.
+- **Build/deploy** the current `feature/v3-migration` plugin (SDK ref **`…wrapper-path.20`**) to the test processor (`.116`) and confirm the room **pairs and connects**.
+  - **Required: SDK `.19` or later.** Earlier prereleases (`.8`–`.18`) were cross-compiled with a toolchain whose `libstdc++`/`glibc` are newer than 4-series firmware provides, so the native wrapper fails to `dlopen` (`GLIBCXX_3.4.29 not found`) and the device won't load. `.19`+ are built with the pinned GCC 9 toolchain (`GLIBCXX_3.4.21 / GLIBC_2.4`). See zoom-room-sdk-lib PR #4.
 - **Device key:** these commands use `zoomRoom-1`. **Replace it with your actual device key** if different (check your config / the load log).
 - **Console:** SSH to the processor and run the `devjson` commands below (copy the whole line). Each calls a public method on the device by name with a `params` array.
 - **Reading results:**
@@ -15,7 +18,7 @@ Validates the SDK feature-exposure work wired so far on `feature/v3-migration`.
 > **IMPORTANT — "Method successfully called" ≠ the SDK accepted it.** That message only means the C# method didn't throw. As of build `ad599c2`, the controller **logs the SDK return code**: a non-zero/failed SDK result appears as a **`SDK call <Name> returned error code <n>` / `returned failure`** Warning in the log. So for each command, **also check the log** — no warning = SDK accepted it; a warning = the SDK rejected it (wrong state, feature unavailable, etc.). Set the device log level to Debug to also see `SDK call <Name> ok` lines.
 
 ### Required build
-Deploy a build at **commit `ad599c2` or later** (SDK ref `…wrapper-path.7`). Earlier builds lack `LogParticipants` and the SDK return-code logging. (In the 2026-06-04 test run, `LogParticipants` returned "Unable to find method" because the deployed build predated it.)
+Deploy the current `feature/v3-migration` head (SDK ref **`…wrapper-path.20`**, GCC-9 native wrapper). This includes `LogParticipants`, the SDK return-code logging, and all N1–N4 features.
 
 ### Test conditions that matter (from first test pass)
 - **Layout changes need MORE THAN ONE participant** to be visible — in a solo/instant meeting, Gallery/Speaker/Strip all look identical (one tile). Use a meeting with ≥2 video participants.
@@ -36,26 +39,26 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[32768]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[49152]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[65535]}
 ```
-- [ ] Device volume tracks **0% / 25% / 50% / 75% / 100%** respectively (the `.7` fix; previously 65535 only reached 39%).
+- [x] **SDK-accepted** at all 5 levels (CP4N 2026-06-05, no failure warning). *Spot-check the actual room %tracking (0/25/50/75/100) when convenient — the 0–255 scaling fix.*
 
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"MuteOn","params":[]}
 ```
-- [ ] Output mutes (volume drops to 0); **MuteFeedback = true**.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm output mutes / MuteFeedback = true on the room.*
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"MuteOff","params":[]}
 ```
-- [ ] Output **restores to the previous level**; MuteFeedback = false.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm output restores / MuteFeedback = false.*
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"MuteToggle","params":[]}
 ```
-- [ ] Toggles mute on/off.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm it toggles mute on/off.*
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeUp","params":[true]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeDown","params":[true]}
 ```
-- [ ] Each call steps the volume up/down ~5%. (`params` must be `[true]` — it's the press flag.)
-- [ ] On reconnect, **VolumeLevelFeedback** seeds to the room's current volume (set volume, reboot/redeploy, confirm feedback matches).
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm each call steps ~5%.* (`params` must be `[true]` — the press flag.)
+- [ ] On reconnect, **VolumeLevelFeedback** seeds to the room's current volume (set volume, reboot/redeploy, confirm feedback matches). *(reboot test — not yet run)*
 
 ---
 
@@ -68,24 +71,24 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"SelfViewModeToggle","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelfViewModeOff","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelfViewModeOn","params":[]}
 ```
-- [ ] `Off` **hides** the self-view PiP; `On` restores it (at the last visible size); `Toggle` alternates. **SelfviewIsOnFeedback** matches.
+- [x] **SDK-accepted** (CP4N 2026-06-05, no warning). *Confirm `Off` hides / `On` restores / `Toggle` alternates the PiP and SelfviewIsOnFeedback matches — best seen in a meeting.*
 
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipSizeToggle","params":[]}
 ```
-- [ ] Each call cycles size **Off → Size1 → Size2 → Size3 → Strip → Off**; PiP visibly resizes (Off hides it). **SelfviewPipSizeFeedback** updates.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm size cycles Off → Size1 → Size2 → Size3 → Strip → Off and SelfviewPipSizeFeedback updates — in a meeting.*
 
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipPositionToggle","params":[]}
 ```
-- [ ] Each call moves the PiP through the corners **UpLeft → UpRight → DownRight → DownLeft**. **SelfviewPipPositionFeedback** updates.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm the PiP cycles corners and SelfviewPipPositionFeedback updates — in a meeting.*
 
-Explicit set (optional — passes an object param; if your console can't deserialize it, use the toggles above):
+Explicit set (passes an object param):
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipSizeSet","params":[{"command":"Size2","label":"Size 2"}]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SelfviewPipPositionSet","params":[{"command":"DownRight","label":"Lower Right"}]}
 ```
-- [ ] PiP jumps directly to the requested size/position.
+- [x] **Not testable via `devjson`** — confirmed on CP4N these return *"Object must implement IConvertible"* (devjson can't deserialize the `{command,label}` object). The **toggle** commands above exercise the same code path; validate sizes/positions through those (or via the bridge/touchpanel).
 
 ---
 
@@ -98,20 +101,20 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["Speaker"]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["Strip"]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"SetLayout","params":["ShareAll"]}
 ```
-- [ ] Gallery → gallery view; Speaker → speaker view; Strip → thumbnail/strip; ShareAll → content-only. (Before the fix these silently reordered tiles or no-op'd.)
+- [x] **SDK-accepted** for all four styles (CP4N 2026-06-05, no warning). *Visible switch (gallery/speaker/strip/content-only) needs a meeting with ≥2 video participants — confirm there.*
 
 **Paging** (needs more participants than fit on one page):
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"LayoutTurnNextPage","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"LayoutTurnPreviousPage","params":[]}
 ```
-- [ ] Gallery view pages forward/back. **LayoutViewIsOnFirstPage / LayoutViewIsOnLastPage** feedbacks update (true on first/last page) — driven by the SDK page-status event.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Visible paging + LayoutViewIsOnFirstPage/LastPage feedbacks need more participants than fit one page — confirm in a populated meeting.*
 
 **Content/thumbnail swap** (needs shared content in the meeting):
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"SwapContentWithThumbnail","params":[]}
 ```
-- [ ] Toggles between content-primary and video-primary on a single screen; **ContentSwappedWithThumbnailFeedback** flips each call.
+- [x] **SDK-accepted** (CP4N 2026-06-05). *Visible swap needs shared content in the meeting; ContentSwappedWithThumbnailFeedback flips each call — confirm with content present.*
 
 ---
 
@@ -123,11 +126,11 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Laptop"]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharingOnlyMeeting","params":["Ios"]}
 ```
-- [ ] Room enters a sharing-only/local-presentation state; `Laptop`/`Ios` show the matching share-instruction overlay.
+- [x] **Validated on CP4N 2026-06-05** — SDK-accepted, and the room actually transitioned `ConnectingToMeeting → InMeeting`. *Confirm the `Laptop`/`Ios` instruction overlays on the room display.*
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"StartNormalMeetingFromSharingOnlyMeeting","params":[]}
 ```
-- [ ] Converts the active local presentation into a normal Zoom meeting.
+- [x] **SDK-accepted** on CP4N 2026-06-05. *Confirm it converts the local presentation into a normal meeting.*
 
 **HDMI ("black magic") share** — *needs an HDMI source connected to the room*:
 ```
@@ -135,6 +138,7 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharing","params":[]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
 ```
 - [ ] `StartSharing` begins sharing the HDMI input (shown locally); `StopSharing` ends it. **SharingContentIsOnFeedback** reflects state.
+  > On the bare CP4N rig (2026-06-05) both returned `SDK call ShareBlackMagic/StopShare returned failure` — **expected with no HDMI source connected**. Retest on a room with an HDMI source.
 
 ---
 
@@ -208,12 +212,13 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeToggle","params":[
 - [ ] Near-end PTZ moves the **main** room camera; **no** `Camera command: unsupported …` or `SDK call ControlCamera returned error code …` Warning.
 - [ ] AutoMode On engages speaker-tracking framing; Off returns to manual; **CameraAutoModeIsOnFeedback** flips with each.
 - [ ] **No** `SDK call ChangeSmartCameraMode returned error code …` Warning.
+  > On the bare CP4N rig (2026-06-05) all three returned `SDK call ChangeSmartCameraMode returned failure` — **expected: the rig has no camera** ("No local cameras reported by the SDK"). Retest on a camera-equipped room.
 
 ## 10. Local single-prominent layout toggle (N3)
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"LocalLayoutToggleSingleProminent","params":[]}
 ```
-- [ ] Toggles between Speaker (one large tile) and Gallery; **LocalLayoutFeedback** tracks it.
+- [x] **SDK-accepted** on CP4N 2026-06-05 (no warning). *Visible Speaker↔Gallery toggle + LocalLayoutFeedback best confirmed in a ≥2-participant meeting.*
 - [ ] `MinMaxLayoutToggle` is **expected to no-op** with a "no Zoom Room SDK equivalent" warning (by design).
 
 ## 11. Camera device list + SelectCamera (N2c) — needs ≥1 local camera
@@ -238,6 +243,53 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
 - [ ] With **no** pending invite, RejectCall logs `No pending meeting invite` (error -2) — expected, harmless.
 - [ ] The local call status flips to **Disconnected** and the UI clears.
 - [ ] (Accept path unchanged) `AcceptCall` still joins via meeting number — confirm it still works.
+
+---
+
+## Remaining to validate on a fully-equipped room
+
+The 2026-06-05 CP4N pass cleared everything the bench rig could exercise. The items below still need a **camera-equipped, calendar-linked Zoom Room in a ≥2-participant meeting**, plus an HDMI source and an inbound invite. Grouped by what each needs:
+
+**A ≥2-participant meeting + this room as host** (get userIds from `LogParticipants` first):
+```text
+devjson {"deviceKey":"zoomRoom-1","methodName":"LogParticipants","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"MuteVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"UnmuteVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"ToggleVideoForParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"RemoveParticipant","params":[<userId>]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SetParticipantAsHost","params":[<userId>]}
+```
+*Also re-confirm the **visible** effect of the already-SDK-accepted layout/self-view commands here (switching, paging, swap, single-prominent, PiP size/position).*
+
+**A local camera attached:**
+```text
+devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeOn","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeOff","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"CameraAutoModeToggle","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"SelectCamera","params":["<deviceId>"]}
+```
+*Watch the connect log for `Added near-end camera id="…"` to get the real `<deviceId>`. Near-end PTZ runs through bridge/touchpanel joins, not devjson.*
+
+**An HDMI source connected to the room:**
+```text
+devjson {"deviceKey":"zoomRoom-1","methodName":"StartSharing","params":[]}
+devjson {"deviceKey":"zoomRoom-1","methodName":"StopSharing","params":[]}
+```
+
+**A configured calendar with a scheduled meeting:**
+```text
+devjson {"deviceKey":"zoomRoom-1","methodName":"GetSchedule","params":[]}
+```
+*Expect `Schedule updated: N meeting(s) (result 0)` and populated `CodecSchedule.Meetings` (the bench rig returned `result 5 / 0 meetings` = no calendar).*
+
+**An inbound meeting invite ringing the room:**
+```text
+devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
+```
+
+**Observe-only feedbacks (no command):**
+- **CanRecord (§6)** — join a recording-permitted vs. not-permitted meeting, watch `MeetingCanRecord`.
+- **Volume seed-on-reconnect (§1)** — set volume, reboot/redeploy, confirm `VolumeLevelFeedback` matches.
 
 ---
 
