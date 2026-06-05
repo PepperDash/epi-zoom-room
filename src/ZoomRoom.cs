@@ -53,6 +53,9 @@ namespace PepperDash.Essentials.Plugins
         // The ZRC SDK does not expose per-participant pin state, so we track what THIS room pinned
         // (best-effort) to drive ToggleParticipantPinState. Keyed by userId -> screenIndex.
         private readonly Dictionary<int, int> _pinnedUserScreens = new Dictionary<int, int>();
+        // Ringing incoming meeting-invite, surfaced as an ActiveCall so the standard Accept/Reject
+        // path works. Answered via AnswerMeetingInvite (the native side cached the full invite).
+        private CodecActiveCallItem _pendingInviteCall;
         private string _currentMeetingId     = string.Empty;
         private string _currentMeetingNumber = string.Empty;
         private string _currentMeetingName   = string.Empty;
@@ -771,6 +774,7 @@ namespace PepperDash.Essentials.Plugins
                     _currentMeetingName   = string.Empty;
                     _sdkIsHost            = false;
                     _sdkHostName          = string.Empty;
+                    _pendingInviteCall    = null;
                     if (ActiveCalls.Count > 0)
                     {
                         var call = ActiveCalls.FirstOrDefault();
@@ -820,6 +824,7 @@ namespace PepperDash.Essentials.Plugins
             _sdkMeetingLocked     = false;
             _sdkIsRecording       = false;
             _pinnedUserScreens.Clear();
+            _pendingInviteCall    = null;
             ActiveCalls.Clear();
             Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
             OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
@@ -834,8 +839,25 @@ namespace PepperDash.Essentials.Plugins
 
         private void OnControllerMeetingInvite(object sender, SdkEventArgs e)
         {
-            // SDK MeetingInvite fires when a meeting invitation arrives (e.g., a call-in meeting invite)
-            this.LogInformation("MeetingInvite received code={Code}", e.ErrorCode);
+            // Fires on OnReceiveMeetingInviteNotification (a contact/room inviting this room into a
+            // meeting). e.Message is the caller name; the native side caches the full invite so it
+            // can be answered with AnswerMeetingInvite. Surface it as a Ringing/Incoming ActiveCall so
+            // the standard codec Accept/Reject (and touchpanel incoming-call UI) work.
+            var caller = string.IsNullOrEmpty(e.Message) ? "Incoming meeting invite" : e.Message;
+            this.LogInformation("MeetingInvite received from \"{Caller}\"", caller);
+
+            if (_pendingInviteCall != null) return; // already ringing
+
+            _pendingInviteCall = new CodecActiveCallItem
+            {
+                Name      = caller,
+                Id        = "meeting-invite",
+                Status    = eCodecCallStatus.Ringing,
+                Direction = eCodecCallDirection.Incoming,
+                Type      = eCodecCallType.Video,
+            };
+            ActiveCalls.Add(_pendingInviteCall);
+            OnCallStatusChange(_pendingInviteCall);
         }
 
         private void OnControllerMeetingLockStatusChanged(object sender, SdkEventArgs e)
@@ -1438,8 +1460,19 @@ namespace PepperDash.Essentials.Plugins
 
 		public override void AcceptCall(CodecActiveCallItem call)
 		{
-			if (call != null)
-				_controller.JoinMeeting(call.Id);
+			if (call == null) return;
+
+			// An incoming ringing call is a meeting invite — accept it via AnswerMeetingInvite (there
+			// is no meeting number in the invite event to JoinMeeting with). The resulting InMeeting
+			// status promotes this ActiveCall to Connected.
+			if (call.Direction == eCodecCallDirection.Incoming && call.Status == eCodecCallStatus.Ringing)
+			{
+				_controller.AnswerMeetingInvite(true);
+				_pendingInviteCall = null;
+				return;
+			}
+
+			_controller.JoinMeeting(call.Id);
 		}
 
 		public void RejectCall()
@@ -1454,14 +1487,18 @@ namespace PepperDash.Essentials.Plugins
 
 		public override void RejectCall(CodecActiveCallItem call)
 		{
-			// Decline the incoming meeting invite via the SDK (it answers the cached invite with
-			// accept=false). The local call-status update keeps the UI in sync regardless.
+			// Decline the incoming meeting invite via the SDK (answers the cached invite with
+			// accept=false), then clear the ringing ActiveCall.
 			_controller.AnswerMeetingInvite(false);
-			if (call != null)
+
+			var item = call ?? _pendingInviteCall;
+			if (item != null)
 			{
-				call.Status = eCodecCallStatus.Disconnected;
-				OnCallStatusChange(call);
+				item.Status = eCodecCallStatus.Disconnected;
+				OnCallStatusChange(item);
+				ActiveCalls.Remove(item);
 			}
+			_pendingInviteCall = null;
 		}
 
 		public override void Dial(Meeting meeting)
