@@ -64,13 +64,13 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeUp","params":[true]}
 devjson {"deviceKey":"zoomRoom-1","methodName":"VolumeDown","params":[true]}
 ```
 - [x] **SDK-accepted** (CP4N 2026-06-05). *Confirm each call steps ~5%.* (`params` must be `[true]` — the press flag.)
-- [ ] On reconnect, **VolumeLevelFeedback** seeds to the room's current volume. *(reboot test — not yet run.)* Console-doable: set a distinctive level, reboot/redeploy, then read it back with the `LogVolume` shim — it should report the room's current level, not 0:
+- [x] On reconnect, **VolumeLevelFeedback** seeds to the room's current volume. **Validated on CP4N 2026-06-05** ✅ — set `32768`, rebooted, and after reconnect `LogVolume` reported `level=32639` (seeded from the room, **not 0**). Console flow:
   ```
   devjson {"deviceKey":"zoomRoom-1","methodName":"SetVolume","params":[32768]}
      (reboot / redeploy, wait for the room to reconnect)
   devjson {"deviceKey":"zoomRoom-1","methodName":"LogVolume","params":[]}
   ```
-  Expect `Volume: level=~32768 (0-65535) muted=False`.
+  > **The `32768 → 32639` delta is expected, not a bug** — it's the 0–255 SDK quantization round-trip: `32768/65535×255 = 127.5 → 127`, then `127/255×65535 = 32639`. The room stores volume at 1/255 granularity (~257 counts/step), so a seeded value lands on the nearest step.
 
 ---
 
