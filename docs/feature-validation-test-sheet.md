@@ -297,7 +297,7 @@ devjson {"deviceKey":"zoomRoom-1","methodName":"InviteContactById","params":["<c
 ```
 - [x] **From idle → MeetWithImUsers validated** ✅ CP4N 2026-06-05 — `Starting a new meeting with contact …` → ConnectingToMeeting → InMeeting, no failure warning.
 - [x] **In a meeting → InviteAttendees validated** ✅ CP4N 2026-06-05 — `Inviting contact … to the current meeting`, no failure warning.
-- [ ] Confirm on the **target** device/user that the invite actually arrives/rings. (An unknown ID logs `not in the downloaded directory — sending anyway`.)
+- [x] **Validated on CP4N 2026-06-05** ✅ — the invite **rang on the target device both ways** (idle→new PMI meeting *and* in-meeting→invite). Note: `MeetWithImUsers` from idle starts the room's **PMI instant meeting** (`StartPmiResult`/`InstantMeetingStarted`) and invites the contact into it. (An unknown ID logs `not in the downloaded directory — sending anyway`.)
 
 > Production UI path (touchpanel/bridge) uses `Dial(IInvitableContact)` / `InviteContactsToNewMeeting` / `InviteContactsToExistingMeeting` with real contact objects — exercise those via the bridge if available. `LogDirectory`/`InviteContactById` are CLI test shims over the same `InviteAttendees`/`MeetWithImUsers` controller calls.
 
