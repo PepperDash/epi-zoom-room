@@ -2062,6 +2062,28 @@ namespace PepperDash.Essentials.Plugins
 
 		#endregion
 
+		// Host controls (mute / video / pin) target OTHER participants. Resolves the live participant
+		// for userId, or returns false with a clear warning if it isn't a current participant or is
+		// the room itself — both of which the SDK otherwise rejects with an opaque "returned failure".
+		private bool TryGetControllableParticipant(int userId, string op, out Participant user)
+		{
+			lock (_participantLock)
+				user = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == userId);
+
+			if (user == null)
+			{
+				this.LogWarning("{Op}: userId {UserId} is not a current meeting participant — run LogParticipants for valid IDs.", op, userId);
+				return false;
+			}
+			if (user.IsMyself)
+			{
+				this.LogWarning("{Op}: userId {UserId} is this room (self); host controls target OTHER participants, not the room.", op, userId);
+				user = null;
+				return false;
+			}
+			return true;
+		}
+
 		#region IHasParticipantAudioMute Members
 
         public void MuteAudioForAllParticipants()
@@ -2071,23 +2093,19 @@ namespace PepperDash.Essentials.Plugins
 
 		public void MuteAudioForParticipant(int userId)
 		{
+			if (!TryGetControllableParticipant(userId, nameof(MuteAudioForParticipant), out _)) return;
 			_controller.MuteUserAudio(userId, true);
 		}
 
 		public void UnmuteAudioForParticipant(int userId)
 		{
+			if (!TryGetControllableParticipant(userId, nameof(UnmuteAudioForParticipant), out _)) return;
 			_controller.MuteUserAudio(userId, false);
 		}
 
 		public void ToggleAudioForParticipant(int userId)
 		{
-			var user = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId.Equals(userId));
-
-			if (user == null)
-			{
-				this.LogDebug("Unable to find user with id: {UserId}", userId);
-				return;
-			}
+			if (!TryGetControllableParticipant(userId, nameof(ToggleAudioForParticipant), out var user)) return;
 
 			// NOTE: the host can mute directly, but "unmute" only sends a REQUEST (the participant
 			// gets a popup and must accept). So when the tracked state is muted, this requests an
@@ -2110,23 +2128,19 @@ namespace PepperDash.Essentials.Plugins
 
 		public void MuteVideoForParticipant(int userId)
 		{
+			if (!TryGetControllableParticipant(userId, nameof(MuteVideoForParticipant), out _)) return;
 			_controller.MuteUserVideo(userId, true);
 		}
 
 		public void UnmuteVideoForParticipant(int userId)
 		{
+			if (!TryGetControllableParticipant(userId, nameof(UnmuteVideoForParticipant), out _)) return;
 			_controller.MuteUserVideo(userId, false);
 		}
 
 		public void ToggleVideoForParticipant(int userId)
 		{
-			var user = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId.Equals(userId));
-
-			if (user == null)
-			{
-				this.LogDebug("Unable to find user with id: {UserId}", userId);
-				return;
-			}
+			if (!TryGetControllableParticipant(userId, nameof(ToggleVideoForParticipant), out var user)) return;
 
 			// Same caveat as audio: the host can stop a participant's video directly, but starting it
 			// only sends a REQUEST (popup on the participant). So the unmute branch won't force video on.
@@ -2157,6 +2171,7 @@ namespace PepperDash.Essentials.Plugins
 
 		public void PinParticipant(int userId, int screenIndex)
 		{
+			if (!TryGetControllableParticipant(userId, nameof(PinParticipant), out _)) return;
 			// Track on success so ToggleParticipantPinState can later unpin (the SDK exposes no
 			// per-participant pin state of its own).
 			if (_controller.PinUserOnScreen(userId, screenIndex))
@@ -2172,6 +2187,7 @@ namespace PepperDash.Essentials.Plugins
 
 		public void ToggleParticipantPinState(int userId, int screenIndex)
 		{
+			if (!TryGetControllableParticipant(userId, nameof(ToggleParticipantPinState), out _)) return;
 			// SDK gives no pin-state feedback, so toggle off our own tracked set rather than the
 			// always-false IsPinnedFb (which made the toggle always re-pin and fail on an
 			// already-pinned user).
