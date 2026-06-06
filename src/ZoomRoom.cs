@@ -9,6 +9,7 @@ using Crestron.SimplSharpPro.CrestronThread;
 using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
+using PepperDash.Essentials.AppServer.Messengers;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Config;
@@ -605,6 +606,50 @@ namespace PepperDash.Essentials.Plugins
 				"forceRepairZoom", "Clear stored credentials and re-pair using the configured activation code", ConsoleAccessLevelEnum.AccessOperator);
 
 			return base.CustomActivate();
+		}
+
+		/// <summary>
+		/// Registers the Zoom Room-specific Mobile Control messenger (zoom layouts, participants,
+		/// recording, meeting lock, wireless sharing, camera auto mode, selfview, phone dialing, etc.)
+		/// alongside the default core messengers. Called automatically during activation by
+		/// <see cref="EssentialsDevice.CustomActivate"/>.
+		/// </summary>
+		protected override void CreateMobileControlMessengers()
+		{
+			// Keep the default core messengers for the standard interfaces this codec implements
+			// (IHasStartMeeting, IHasMeetingInfo, IPasswordPrompt, IHasCodecCameras, IHasCodecSelfView,
+			// IHasFarEndContentStatus, ICommunicationMonitor, ...). The ZoomRoomMessenger below only
+			// adds the Zoom-specific actions/status those core messengers don't cover.
+			base.CreateMobileControlMessengers();
+
+			var controller = DeviceManager.AllDevices.OfType<IMobileControl>().FirstOrDefault();
+			if (controller == null)
+			{
+				this.LogWarning("No IMobileControl controller found; ZoomRoomMessenger will not be registered for {key}", Key);
+				return;
+			}
+
+			var path = $"/device/{Key}";
+
+			// Device-level glue (dial/invite, near-end camera mute, end-meeting, directory).
+			controller.AddDeviceMessenger(new ZoomRoomMessenger($"{Key}-zoomRoom-{controller.Key}", path, this));
+
+			// One messenger per capability interface (named after the interface, per the core convention).
+			controller.AddDeviceMessenger(new IHasParticipantsMessenger($"{Key}-participants-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasParticipantPinUnpinMessenger($"{Key}-participantPin-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasParticipantAudioMuteMessenger($"{Key}-participantAudioMute-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasMeetingLockMessenger($"{Key}-meetingLock-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasMeetingRecordingWithPromptMessenger($"{Key}-meetingRecording-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasPresentationOnlyMeetingMessenger($"{Key}-presentationOnly-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasCameraAutoModeMessenger($"{Key}-cameraAutoMode-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasSelfviewPositionMessenger($"{Key}-selfviewPosition-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasSelfviewSizeMessenger($"{Key}-selfviewSize-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IHasPhoneDialingMessenger($"{Key}-phoneDialing-{controller.Key}", path, this));
+			// Reuse the core IHasScheduleAwarenessMessenger (it ships in mobile-control-messengers but isn't
+			// in the auto-registry); note its ctor arg order is (key, source, messagePath).
+			controller.AddDeviceMessenger(new IHasScheduleAwarenessMessenger($"{Key}-schedule-{controller.Key}", this, path));
+			controller.AddDeviceMessenger(new IHasZoomRoomLayoutsMessenger($"{Key}-zoomLayouts-{controller.Key}", path, this));
+			controller.AddDeviceMessenger(new IZoomWirelessShareInstructionsMessenger($"{Key}-wirelessShare-{controller.Key}", path, this));
 		}
 
 	    #region Overrides of Device
@@ -2105,6 +2150,29 @@ namespace PepperDash.Essentials.Plugins
         }
 
         /// <summary>
+        /// The SDK participant infos currently in the waiting room (flagged "silent mode"). The ZRC SDK
+        /// has no dedicated waiting-room roster, so this is derived from the participant feed.
+        /// </summary>
+        private List<ParticipantInfo> GetWaitingRoomInfos()
+        {
+            lock (_participantLock)
+                return _participantInfoByUserId.Values.Where(p => p.IsInSilentMode).ToList();
+        }
+
+        /// <summary>
+        /// Participants currently in the waiting room (derived from the "silent mode" flag). Mapped to the
+        /// standard <see cref="Participant"/> shape so the mobile UI can render them like the main roster.
+        /// </summary>
+        public List<Participant> WaitingRoomParticipants => GetWaitingRoomInfos().Select(MapParticipant).ToList();
+
+        /// <summary>Removes (expels) everyone currently in the waiting room.</summary>
+        public void RemoveAllFromWaitingRoom()
+        {
+            foreach (var info in GetWaitingRoomInfos())
+                _controller.ExpelUser(info.UserID);
+        }
+
+        /// <summary>
         /// Console/test helper: lists participants currently in the waiting room. The ZRC SDK has no
         /// dedicated waiting-room roster — waiting users arrive in the normal participant feed flagged
         /// "silent mode" (<see cref="ParticipantInfo.IsInSilentMode"/>). Admit them with
@@ -2112,9 +2180,7 @@ namespace PepperDash.Essentials.Plugins
         /// </summary>
         public void LogWaitingRoom()
         {
-            List<ParticipantInfo> waiting;
-            lock (_participantLock)
-                waiting = _participantInfoByUserId.Values.Where(p => p.IsInSilentMode).ToList();
+            var waiting = GetWaitingRoomInfos();
 
             if (waiting.Count == 0)
             {
