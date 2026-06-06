@@ -213,6 +213,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.RecordingStatus         += (s, e) => SafeRaise(() => RecordingStatusChanged?.Invoke(this, e));
             _sdk.RecordingRequest        += (s, e) => SafeRaise(() => RecordingRequestReceived?.Invoke(this, e));
             _sdk.MeetingRecordingInfoChanged += (s, e) => SafeRaise(() => MeetingRecordingInfoChanged?.Invoke(this, e));
+            _sdk.CameraPresetInfoChanged += (s, e) => SafeRaise(() => CameraPresetInfoChanged?.Invoke(this, e));
             _sdk.ParticipantsInitialized += (s, e) => SafeRaise(() => ParticipantsInitialized?.Invoke(this, e));
             _sdk.UserJoined              += (s, e) => SafeRaise(() => UserJoined?.Invoke(this, e));
             _sdk.UserLeft                += (s, e) => SafeRaise(() => UserLeft?.Invoke(this, e));
@@ -351,6 +352,9 @@ namespace PepperDash.Essentials.Plugins
         public CameraDevice[] GetCameras()              => _sdk.GetCameras();
         public CameraDevice GetCurrentCamera()          => _sdk.TryGetCurrentCamera(out var cam) ? cam : null;
         public bool SetCurrentCamera(string deviceId)   => Rc(nameof(SetCurrentCamera), _sdk.SetCurrentCamera(deviceId));
+        public bool SetCameraPreset(uint index, string deviceId)  => Rc(nameof(SetCameraPreset), _sdk.SetCameraPreset(index, deviceId ?? ""));
+        public bool GoToCameraPreset(uint index, string deviceId) => Rc(nameof(GoToCameraPreset), _sdk.GoToCameraPreset(index, deviceId ?? ""));
+        public bool NameCameraPreset(uint index, string name, string deviceId) => Rc(nameof(NameCameraPreset), _sdk.NameCameraPreset(index, name ?? "", deviceId ?? ""));
 
         // ── Layout ────────────────────────────────────────────────────────────
 
@@ -429,6 +433,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SdkEventArgs> RecordingStatusChanged;
         public event EventHandler<SdkEventArgs> RecordingRequestReceived;
         public event EventHandler<MeetingRecordingInfoEventArgs> MeetingRecordingInfoChanged;
+        public event EventHandler<CameraPresetInfoEventArgs> CameraPresetInfoChanged;
         public event EventHandler<ParticipantListEventArgs> ParticipantsInitialized;
         public event EventHandler<ParticipantListEventArgs> UserJoined;
         public event EventHandler<ParticipantListEventArgs> UserLeft;

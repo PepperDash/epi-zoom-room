@@ -97,6 +97,13 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Selects the active local camera by device ID.</summary>
         bool SetCurrentCamera(string deviceId);
 
+        /// <summary>Saves the current position to a camera preset slot (index 0–2). Empty deviceId = main camera.</summary>
+        bool SetCameraPreset(uint index, string deviceId);
+        /// <summary>Recalls a camera preset slot (index 0–2). Empty deviceId = main camera.</summary>
+        bool GoToCameraPreset(uint index, string deviceId);
+        /// <summary>Names a camera preset slot (index 0–2). Empty deviceId = main camera.</summary>
+        bool NameCameraPreset(uint index, string name, string deviceId);
+
         // ── Layout ────────────────────────────────────────────────────────────
 
         int SetScreenLayout(int screen, int layoutSourceType);
@@ -216,6 +223,7 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<SdkEventArgs> RecordingStatusChanged;
         event EventHandler<SdkEventArgs> RecordingRequestReceived;
         event EventHandler<MeetingRecordingInfoEventArgs> MeetingRecordingInfoChanged;
+        event EventHandler<CameraPresetInfoEventArgs> CameraPresetInfoChanged;
         event EventHandler<ParticipantListEventArgs> ParticipantsInitialized;
         event EventHandler<ParticipantListEventArgs> UserJoined;
         event EventHandler<ParticipantListEventArgs> UserLeft;

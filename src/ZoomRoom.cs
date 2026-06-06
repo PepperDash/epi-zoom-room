@@ -14,6 +14,7 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Config;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
+using PepperDash.Essentials.Core.Presets;
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.Routing;
 using PepperDash.Essentials.Devices.Common.Cameras;
@@ -29,7 +30,7 @@ namespace PepperDash.Essentials.Plugins
 		IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
 		IHasFarEndContentStatus, IHasSelfviewPosition, IHasPhoneDialing, IHasZoomRoomLayouts, IHasParticipantPinUnpin,
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
-        IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions
+        IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets
 	{
 #pragma warning disable CS0067 // Required by IHasCameraMuteWithUnmuteReqeust; never raised because Zoom Room SDK handles video state directly
         public event EventHandler VideoUnmuteRequested;
@@ -650,6 +651,10 @@ namespace PepperDash.Essentials.Plugins
 			controller.AddDeviceMessenger(new IHasScheduleAwarenessMessenger($"{Key}-schedule-{controller.Key}", this, path));
 			controller.AddDeviceMessenger(new IHasZoomRoomLayoutsMessenger($"{Key}-zoomLayouts-{controller.Key}", path, this));
 			controller.AddDeviceMessenger(new IZoomWirelessShareInstructionsMessenger($"{Key}-wirelessShare-{controller.Key}", path, this));
+
+			// Camera-preset recall/save actions (the preset LIST status is published by the auto-registered
+			// core IHasCodecRoomPresetsMessenger; this adds the inbound actions it lacks).
+			controller.AddDeviceMessenger(new IHasCodecRoomPresetsActionsMessenger($"{Key}-presetActions-{controller.Key}", path, this));
 		}
 
 	    #region Overrides of Device
@@ -668,6 +673,7 @@ namespace PepperDash.Essentials.Plugins
             _controller.AudioMuteStatusChanged   += OnControllerAudioMuteStatusChanged;
             _controller.RecordingStatusChanged   += OnControllerRecordingStatusChanged;
             _controller.MeetingRecordingInfoChanged += OnControllerMeetingRecordingInfoChanged;
+            _controller.CameraPresetInfoChanged  += OnControllerCameraPresetInfoChanged;
             _controller.RecordingRequestReceived += OnControllerRecordingRequestReceived;
             _controller.ParticipantsInitialized  += OnControllerParticipantsInitialized;
             _controller.UserJoined               += OnControllerUserJoined;
@@ -2171,6 +2177,48 @@ namespace PepperDash.Essentials.Plugins
             foreach (var info in GetWaitingRoomInfos())
                 _controller.ExpelUser(info.UserID);
         }
+
+        #region IHasCodecRoomPresets (camera presets — ZRC SDK, max 3 per camera, idx 0–2)
+
+        /// <inheritdoc />
+        public event EventHandler<EventArgs> CodecRoomPresetsListHasChanged;
+
+        /// <inheritdoc />
+        public List<CodecRoomPreset> NearEndPresets { get; private set; } = new List<CodecRoomPreset>();
+
+        /// <inheritdoc />
+        public List<CodecRoomPreset> FarEndRoomPresets { get; private set; } = new List<CodecRoomPreset>();
+
+        // Presets target the currently-selected camera; empty id falls back to the main near-end camera.
+        private string CurrentCameraDeviceId => _controller.GetCurrentCamera()?.Id ?? string.Empty;
+
+        /// <inheritdoc />
+        public void CodecRoomPresetSelect(int preset) => _controller.GoToCameraPreset((uint)preset, CurrentCameraDeviceId);
+
+        /// <inheritdoc />
+        public void CodecRoomPresetStore(int preset, string description)
+        {
+            _controller.SetCameraPreset((uint)preset, CurrentCameraDeviceId);
+            if (!string.IsNullOrEmpty(description))
+                _controller.NameCameraPreset((uint)preset, description, CurrentCameraDeviceId);
+        }
+
+        /// <inheritdoc />
+        public void SelectFarEndPreset(int preset) =>
+            this.LogDebug("SelectFarEndPreset({Preset}) not supported by Zoom Room camera presets", preset);
+
+        private void OnControllerCameraPresetInfoChanged(object sender, CameraPresetInfoEventArgs e)
+        {
+            NearEndPresets = e.Presets
+                .Select(p => new CodecRoomPreset(
+                    p.Index,
+                    string.IsNullOrEmpty(p.Name) ? string.Format("Preset {0}", p.Index + 1) : p.Name,
+                    false, true))
+                .ToList();
+            CodecRoomPresetsListHasChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        #endregion
 
         /// <summary>
         /// Console/test helper: lists participants currently in the waiting room. The ZRC SDK has no
