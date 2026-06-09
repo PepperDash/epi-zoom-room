@@ -1814,7 +1814,7 @@ namespace PepperDash.Essentials.Plugins
 					_directoryContactsById.Values.Select(c => (DirectoryItem)MapDirectoryContact(c)).ToList());
 			}
 
-			this.LogInformation("Directory updated: {ContactCount} contact(s) (batch of {BatchCount})",
+			this.LogDebug("Directory updated: {ContactCount} contact(s) (batch of {BatchCount})",
 				directory.Contacts.Count, e.Contacts.Length);
 
 			DirectoryRoot = directory;
@@ -1869,7 +1869,7 @@ namespace PepperDash.Essentials.Plugins
 				.OrderBy(m => m.StartTime)   // chronological order
 				.ToList();
 
-			this.LogInformation("Schedule updated: {MeetingCount} meeting(s) (result {Result})",
+			this.LogDebug("Schedule updated: {MeetingCount} meeting(s) (result {Result})",
 				meetings.Count, e.Result);
 
 			CodecSchedule.Meetings = meetings;
