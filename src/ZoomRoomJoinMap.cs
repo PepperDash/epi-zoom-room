@@ -305,21 +305,6 @@ namespace PepperDash.Essentials.Plugins
 				JoinType = eJoinType.DigitalSerial
 			});		
 
-		// TODO: #714 [ ] JoinMap >> SelfivewPipSizeToggle
-		[JoinName("SelfviewPipSizeToggle")]
-		public JoinDataComplete SelfviewPipSizeToggle = new JoinDataComplete(
-			new JoinData
-			{
-				JoinNumber = 231,
-				JoinSpan = 1
-			},
-			new JoinMetadata
-			{
-				Description = "Toggles the selfview pip size, (aka layout size)",
-				JoinCapabilities = eJoinCapabilities.ToFromSIMPL,
-				JoinType = eJoinType.Digital
-			});
-
         [JoinName("StartRecording")]
         public JoinDataComplete StartRecording = new JoinDataComplete(
             new JoinData
