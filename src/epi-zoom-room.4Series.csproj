@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PepperDashEssentials" Version="3.0.0-dev-v3-routing.11">
+    <PackageReference Include="PepperDashEssentials" Version="3.0.0-dev-v3-routing.12">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
   </ItemGroup>
