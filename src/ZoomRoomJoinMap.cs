@@ -59,7 +59,7 @@ namespace PepperDash.Essentials.Plugins
             },
             new JoinMetadata
             {
-                Description = "FB Indicates the password entered is incorrect",
+                Description = "FB Indicates the password login failed",
                 JoinCapabilities = eJoinCapabilities.ToSIMPL,
                 JoinType = eJoinType.Digital
             });
@@ -134,6 +134,23 @@ namespace PepperDash.Essentials.Plugins
                 JoinType = eJoinType.Digital
             });
 
+        // Input side of join 100 (the base VideoCodecControllerJoinMap defines the ToSIMPL
+        // "directory search busy" feedback on the same join; input and output are independent).
+        // Manual phonebook fetch — the only way to load contacts when DisablePhonebookAutoDownload is set.
+        [JoinName("PhonebookGet")]
+        public JoinDataComplete PhonebookGet = new JoinDataComplete(
+            new JoinData
+            {
+                JoinNumber = 100,
+                JoinSpan = 1
+            },
+            new JoinMetadata
+            {
+                Description = "Pulse to (re)download the phonebook/contacts",
+                JoinCapabilities = eJoinCapabilities.FromSIMPL,
+                JoinType = eJoinType.Digital
+            });
+
 		[JoinName("CanSwapContentWithThumbnail")]
 		public JoinDataComplete CanSwapContentWithThumbnail = new JoinDataComplete(
 			new JoinData
@@ -199,7 +216,7 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "Indicates if layout is on first page",
+				Description = "Indicates if layout is on last page",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.Digital
 			});
@@ -355,7 +372,7 @@ namespace PepperDash.Essentials.Plugins
             new JoinMetadata
             {
                 Description = "Pulse to agree to consent for meeting recording",
-                JoinCapabilities = eJoinCapabilities.ToSIMPL,
+                JoinCapabilities = eJoinCapabilities.FromSIMPL,
                 JoinType = eJoinType.Digital
             });
 
@@ -369,7 +386,7 @@ namespace PepperDash.Essentials.Plugins
             new JoinMetadata
             {
                 Description = "Pulse to disagree to consent for meeting recording",
-                JoinCapabilities = eJoinCapabilities.ToSIMPL,
+                JoinCapabilities = eJoinCapabilities.FromSIMPL,
                 JoinType = eJoinType.Digital
             });
 

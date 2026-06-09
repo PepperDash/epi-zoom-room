@@ -1302,6 +1302,12 @@ namespace PepperDash.Essentials.Plugins
 		/// <param name="joinMap"></param>
 		public void LinkZoomRoomToApi(BasicTriList trilist, ZoomRoomJoinMap joinMap)
 		{
+            // Manual phonebook fetch on the input side of join 100 (core wires the search-busy FB
+            // on the output side of the same join — input/output are independent). This is the only
+            // trigger to load contacts when DisablePhonebookAutoDownload is set.
+            trilist.SetSigFalseAction(joinMap.PhonebookGet.JoinNumber,
+                () => _controller.SubscribeContacts(0, 50, false));
+
             var meetingInfoCodec = this as IHasMeetingInfo;
             if (meetingInfoCodec != null)
             {
