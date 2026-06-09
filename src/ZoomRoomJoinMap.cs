@@ -258,7 +258,7 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'Gallery' is available",
+				Description = "Digital: FB layout 'Gallery' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -272,7 +272,7 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'Speaker' is available",
+				Description = "Digital: FB layout 'Speaker' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -286,7 +286,7 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'Strip' is available",
+				Description = "Digital: FB layout 'Strip' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -300,7 +300,7 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'ShareAll' is available",
+				Description = "Digital: FB layout 'ShareAll' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});		
