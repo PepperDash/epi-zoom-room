@@ -155,7 +155,7 @@ namespace PepperDash.Essentials.Plugins
 		public JoinDataComplete CanSwapContentWithThumbnail = new JoinDataComplete(
 			new JoinData
 			{
-				JoinNumber = 206,
+				JoinNumber = 205,
 				JoinSpan = 1
 			},
 			new JoinMetadata
