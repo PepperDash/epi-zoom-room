@@ -2755,32 +2755,14 @@ namespace PepperDash.Essentials.Plugins
 		private void ComputeAvailableLayouts()
 		{
 			this.LogInformation("Computing available layouts...");
-			zConfiguration.eLayoutStyle availableLayouts = zConfiguration.eLayoutStyle.None;
-			if (Status.Layout.can_Switch_Wall_View)
-			{
-				availableLayouts |= zConfiguration.eLayoutStyle.Gallery;
-			}
-
-			if (Status.Layout.can_Switch_Speaker_View)
-			{
-				availableLayouts |= zConfiguration.eLayoutStyle.Speaker;
-			}
-
-			if (Status.Layout.can_Switch_Share_On_All_Screens)
-			{
-				availableLayouts |= zConfiguration.eLayoutStyle.ShareAll;
-			}
-
-			// There is no property that directly reports if strip mode is valid, but API stipulates
-			// that strip mode is available if the number of screens is 1
-			if (Status.NumberOfScreens.NumOfScreens == 1 || Status.Layout.can_Switch_Strip_View || Status.Layout.video_type.ToLower() == "strip")
-			{
-				availableLayouts |= zConfiguration.eLayoutStyle.Strip;
-			}
-
-			this.LogInformation("availablelayouts: {AvailableLayouts}", availableLayouts);
-
-			AvailableLayouts = availableLayouts;
+			// The JSON-over-SSH pipeline that fed Status.Layout is removed; the ZRC SDK has no
+			// per-room layout-capability query. Zoom Rooms universally support all four layout
+			// styles, so report them all as available. Revisit if the SDK gains a capability API.
+			AvailableLayouts = zConfiguration.eLayoutStyle.Gallery
+			                 | zConfiguration.eLayoutStyle.Speaker
+			                 | zConfiguration.eLayoutStyle.Strip
+			                 | zConfiguration.eLayoutStyle.ShareAll;
+			this.LogInformation("availablelayouts: {AvailableLayouts} (static — SDK has no capability query)", AvailableLayouts);
 		}
 
         private void OnLayoutInfoChanged()
