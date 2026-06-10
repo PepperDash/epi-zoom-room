@@ -2212,14 +2212,22 @@ namespace PepperDash.Essentials.Plugins
         private string CurrentCameraDeviceId => _controller.GetCurrentCamera()?.Id ?? string.Empty;
 
         /// <inheritdoc />
-        public void CodecRoomPresetSelect(int preset) => _controller.GoToCameraPreset((uint)preset, CurrentCameraDeviceId);
+        public void CodecRoomPresetSelect(int preset)
+        {
+            // Bridge (SIMPL/Essentials) uses 1-based preset IDs; ZRC SDK slots are 0-based.
+            if (preset < 1) return;
+            _controller.GoToCameraPreset((uint)(preset - 1), CurrentCameraDeviceId);
+        }
 
         /// <inheritdoc />
         public void CodecRoomPresetStore(int preset, string description)
         {
-            _controller.SetCameraPreset((uint)preset, CurrentCameraDeviceId);
+            // Bridge (SIMPL/Essentials) uses 1-based preset IDs; ZRC SDK slots are 0-based.
+            if (preset < 1) return;
+            var slot = (uint)(preset - 1);
+            _controller.SetCameraPreset(slot, CurrentCameraDeviceId);
             if (!string.IsNullOrEmpty(description))
-                _controller.NameCameraPreset((uint)preset, description, CurrentCameraDeviceId);
+                _controller.NameCameraPreset(slot, description, CurrentCameraDeviceId);
         }
 
         /// <inheritdoc />
