@@ -240,6 +240,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.ParticipantCount        += (s, e) => SafeRaise(() => ParticipantCountChanged?.Invoke(this, e));
             _sdk.HostChanged             += (s, e) => SafeRaise(() => HostChanged?.Invoke(this, e));
             _sdk.SharingStatusChanged    += (s, e) => SafeRaise(() => SharingStatusChanged?.Invoke(this, e));
+            _sdk.AirPlayStatusChanged    += (s, e) => SafeRaise(() => AirPlayStatusChanged?.Invoke(this, e));
             _sdk.VideoPageStatusChanged  += (s, e) => SafeRaise(() => VideoPageStatusChanged?.Invoke(this, e));
             _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
             _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
@@ -462,6 +463,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SdkEventArgs> ParticipantCountChanged;
         public event EventHandler<SdkEventArgs> HostChanged;
         public event EventHandler<SharingStatusEventArgs> SharingStatusChanged;
+        public event EventHandler<AirPlayStatusEventArgs> AirPlayStatusChanged;
         public event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         public event EventHandler<SIPCall> SipCallStatusChanged;
         public event EventHandler<SdkEventArgs> ZrcsEnabledChanged;

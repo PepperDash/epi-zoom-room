@@ -688,6 +688,7 @@ namespace PepperDash.Essentials.Plugins
             _controller.ParticipantCountChanged  += (s, e) => Participants.OnParticipantsChanged();
             _controller.HostChanged              += OnControllerHostChanged;
             _controller.SharingStatusChanged     += OnControllerSharingStatusChanged;
+            _controller.AirPlayStatusChanged     += OnControllerAirPlayStatusChanged;
             _controller.VideoPageStatusChanged   += OnControllerVideoPageStatusChanged;
             _controller.SipCallStatusChanged     += OnControllerSipCallStatusChanged;
             _controller.ContactListChanged       += OnControllerContactListChanged;
@@ -1092,6 +1093,22 @@ namespace PepperDash.Essentials.Plugins
             _sdkSharingState = e.SharingState;
             SharingContentIsOnFeedback.FireUpdate();
             ReceivingContent.FireUpdate();
+        }
+
+        private void OnControllerAirPlayStatusChanged(object sender, AirPlayStatusEventArgs e)
+        {
+            Status.Sharing.isAirHostClientConnected       = e.IsAirHostClientConnected;
+            Status.Sharing.isBlackMagicConnected          = e.IsBlackMagicConnected;
+            Status.Sharing.isBlackMagicDataAvailable      = e.IsBlackMagicDataAvailable;
+            Status.Sharing.isSharingBlackMagic            = e.IsSharingBlackMagic;
+            Status.Sharing.isDirectPresentationConnected  = e.IsDirectPresentationConnected;
+            Status.Sharing.password                       = e.Password;
+            Status.Sharing.serverName                     = e.ServerName;
+            Status.Sharing.wifiName                       = e.WifiName;
+            Status.Sharing.directPresentationPairingCode  = e.DirectPresentationPairingCode;
+            Status.Sharing.directPresentationSharingKey   = e.DirectPresentationSharingKey;
+            Status.Sharing.dispState                      = (zStatus.eDisplayState)e.InstructionDisplayState;
+            OnShareInfoChanged(Status.Sharing);
         }
 
         private void OnControllerVideoPageStatusChanged(object sender, VideoPageStatusEventArgs e)

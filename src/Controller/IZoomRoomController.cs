@@ -231,6 +231,7 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<SdkEventArgs> ParticipantCountChanged;
         event EventHandler<SdkEventArgs> HostChanged;
         event EventHandler<SharingStatusEventArgs> SharingStatusChanged;
+        event EventHandler<AirPlayStatusEventArgs> AirPlayStatusChanged;
         event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         event EventHandler<SIPCall> SipCallStatusChanged;
         event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
