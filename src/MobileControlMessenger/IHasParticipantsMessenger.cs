@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Crestron.SimplSharp;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PepperDash.Essentials.AppServer;
@@ -15,6 +16,13 @@ namespace PepperDash.Essentials.AppServer.Messengers
     public class IHasParticipantsMessenger : MessengerBase
     {
         private readonly ZoomRoomDevice _codec;
+
+        // Debounce rapid-fire roster events (e.g. join burst, ParticipantsInitialized + N UserJoined)
+        // into a single MC post. Each event resets the 250 ms window; only the final fire serializes
+        // and pushes the roster JSON (#31).
+        private CTimer _rosterDebounceTimer;
+        private readonly object _rosterDebounceLock = new object();
+        private const int RosterDebounceMs = 250;
 
         public IHasParticipantsMessenger(string key, string messagePath, ZoomRoomDevice codec)
             : base(key, messagePath, codec)
@@ -55,10 +63,18 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
         protected override bool CustomActivate()
         {
-            _codec.Participants.ParticipantsListHasChanged += (s, e) =>
-                Task.Run(() => PostStatusMessage(BuildStatus()));
-
+            _codec.Participants.ParticipantsListHasChanged += (s, e) => ScheduleRosterPost();
             return base.CustomActivate();
+        }
+
+        // Stop any pending timer and start a fresh 250 ms window. Only the final fire posts.
+        private void ScheduleRosterPost()
+        {
+            lock (_rosterDebounceLock)
+            {
+                _rosterDebounceTimer?.Stop();
+                _rosterDebounceTimer = new CTimer(_ => PostStatusMessage(BuildStatus()), RosterDebounceMs);
+            }
         }
 
         private void SendFullStatus(string id = null) => Task.Run(() => PostStatusMessage(BuildStatus(), id));
