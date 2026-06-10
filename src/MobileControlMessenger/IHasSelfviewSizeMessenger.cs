@@ -1,71 +1,43 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using PepperDash.Essentials.AppServer;
 using PepperDash.Essentials.Devices.Common.VideoCodec;
 using ZoomRoomDevice = PepperDash.Essentials.Plugins.ZoomRoom;
 
 namespace PepperDash.Essentials.AppServer.Messengers
 {
+    // ── Size messenger ──────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Mobile Control messenger for <see cref="PepperDash.Essentials.Core.DeviceTypeInterfaces.IHasSelfviewSize"/>:
-    /// set (by command/label) or toggle the selfview PiP size, plus current value and the available options.
+    /// Mobile Control messenger for selfview PiP size.
+    /// Reuses <see cref="SelfviewOptionMessengerBase"/> — identical logic to
+    /// <see cref="IHasSelfviewPositionMessenger"/> with size-specific paths and feedback (#23).
     /// </summary>
-    public class IHasSelfviewSizeMessenger : MessengerBase
+    public class IHasSelfviewSizeMessenger : SelfviewOptionMessengerBase
     {
-        private readonly ZoomRoomDevice _codec;
-
         public IHasSelfviewSizeMessenger(string key, string messagePath, ZoomRoomDevice codec)
-            : base(key, messagePath, codec)
-        {
-            _codec = codec;
-        }
+            : base(key, messagePath, codec) { }
 
-        protected override void RegisterActions()
-        {
-            base.RegisterActions();
+        protected override string ToggleAction  => "/toggleSelfviewSize";
+        protected override string SetAction     => "/setSelfviewSize";
+        protected override void ExecuteToggle() => _codec.SelfviewPipSizeToggle();
+        protected override void ExecuteSet(CodecCommandWithLabel cmd) => _codec.SelfviewPipSizeSet(cmd);
+        protected override StringFeedback GetFeedback()               => _codec.SelfviewPipSizeFeedback;
+        protected override IEnumerable<CodecCommandWithLabel> GetOptions() => _codec.SelfviewPipSizes ?? Enumerable.Empty<CodecCommandWithLabel>();
 
-            AddAction("/fullStatus", (id, content) => SendFullStatus(id));
-
-            AddAction("/toggleSelfviewSize", (id, content) => _codec.SelfviewPipSizeToggle());
-            AddAction("/setSelfviewSize", (id, content) =>
+        protected override DeviceStateMessageBase BuildFullStatus() =>
+            new SelfviewSizeStateMessage
             {
-                var s = content?.ToObject<MobileControlSimpleContent<string>>();
-                var cmd = FindOption(s?.Value);
-                if (cmd != null) _codec.SelfviewPipSizeSet(cmd);
-            });
-        }
+                SelfviewPipSize  = _codec.SelfviewPipSizeFeedback.StringValue,
+                AvailableSizes   = GetOptions().Select(o => new SelfviewOption { Command = o.Command, Label = o.Label }).ToList()
+            };
 
-        protected override bool CustomActivate()
-        {
-            _codec.SelfviewPipSizeFeedback.OutputChange += (s, e) =>
-                Task.Run(() => PostStatusMessage(new SelfviewSizeStateMessage { SelfviewPipSize = e.StringValue }));
-
-            return base.CustomActivate();
-        }
-
-        private CodecCommandWithLabel FindOption(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return null;
-            return _codec.SelfviewPipSizes.FirstOrDefault(o => string.Equals(o.Command, value, StringComparison.OrdinalIgnoreCase))
-                   ?? _codec.SelfviewPipSizes.FirstOrDefault(o => string.Equals(o.Label, value, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private void SendFullStatus(string id = null) =>
-            Task.Run(() => PostStatusMessage(new SelfviewSizeStateMessage
-            {
-                SelfviewPipSize = _codec.SelfviewPipSizeFeedback.StringValue,
-                AvailableSizes = _codec.SelfviewPipSizes?
-                    .Select(o => new SelfviewOption { Command = o.Command, Label = o.Label }).ToList()
-            }, id));
+        protected override DeviceStateMessageBase BuildChangedStatus(string newValue) =>
+            new SelfviewSizeStateMessage { SelfviewPipSize = newValue };
     }
 
-    /// <summary>
-    /// Status payload for <see cref="IHasSelfviewSizeMessenger"/>.
-    /// </summary>
+    /// <summary>Status payload for <see cref="IHasSelfviewSizeMessenger"/>.</summary>
     public class SelfviewSizeStateMessage : DeviceStateMessageBase
     {
         [JsonProperty("selfviewPipSize", NullValueHandling = NullValueHandling.Ignore)]

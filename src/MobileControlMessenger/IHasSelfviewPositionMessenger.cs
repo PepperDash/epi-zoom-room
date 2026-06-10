@@ -11,61 +11,91 @@ using ZoomRoomDevice = PepperDash.Essentials.Plugins.ZoomRoom;
 namespace PepperDash.Essentials.AppServer.Messengers
 {
     /// <summary>
-    /// Mobile Control messenger for <see cref="PepperDash.Essentials.Core.DeviceTypeInterfaces.IHasSelfviewPosition"/>:
-    /// set (by command/label) or toggle the selfview PiP position, plus current value and the available options.
+    /// Parameterized base for selfview PiP option messengers (position and size share identical logic).
+    /// Subclasses supply the action paths, feedback binding, and JSON property names; the base handles
+    /// /fullStatus, /toggle, /set, and the OutputChange subscription (#23).
     /// </summary>
-    public class IHasSelfviewPositionMessenger : MessengerBase
+    public abstract class SelfviewOptionMessengerBase : MessengerBase
     {
-        private readonly ZoomRoomDevice _codec;
+        protected readonly ZoomRoomDevice _codec;
 
-        public IHasSelfviewPositionMessenger(string key, string messagePath, ZoomRoomDevice codec)
+        protected SelfviewOptionMessengerBase(string key, string messagePath, ZoomRoomDevice codec)
             : base(key, messagePath, codec)
         {
             _codec = codec;
         }
 
+        // Subclass contract
+        protected abstract string ToggleAction { get; }
+        protected abstract string SetAction { get; }
+        protected abstract void ExecuteToggle();
+        protected abstract void ExecuteSet(CodecCommandWithLabel cmd);
+        protected abstract StringFeedback GetFeedback();
+        protected abstract IEnumerable<CodecCommandWithLabel> GetOptions();
+        protected abstract DeviceStateMessageBase BuildFullStatus();
+        protected abstract DeviceStateMessageBase BuildChangedStatus(string newValue);
+
         protected override void RegisterActions()
         {
             base.RegisterActions();
-
             AddAction("/fullStatus", (id, content) => SendFullStatus(id));
-
-            AddAction("/toggleSelfviewPosition", (id, content) => _codec.SelfviewPipPositionToggle());
-            AddAction("/setSelfviewPosition", (id, content) =>
+            AddAction(ToggleAction, (id, content) => ExecuteToggle());
+            AddAction(SetAction, (id, content) =>
             {
                 var s = content?.ToObject<MobileControlSimpleContent<string>>();
                 var cmd = FindOption(s?.Value);
-                if (cmd != null) _codec.SelfviewPipPositionSet(cmd);
+                if (cmd != null) ExecuteSet(cmd);
             });
         }
 
         protected override bool CustomActivate()
         {
-            _codec.SelfviewPipPositionFeedback.OutputChange += (s, e) =>
-                Task.Run(() => PostStatusMessage(new SelfviewPositionStateMessage { SelfviewPipPosition = e.StringValue }));
-
+            GetFeedback().OutputChange += (s, e) =>
+                Task.Run(() => PostStatusMessage(BuildChangedStatus(e.StringValue)));
             return base.CustomActivate();
         }
 
-        private CodecCommandWithLabel FindOption(string value)
+        protected CodecCommandWithLabel FindOption(string value)
         {
             if (string.IsNullOrEmpty(value)) return null;
-            return _codec.SelfviewPipPositions.FirstOrDefault(o => string.Equals(o.Command, value, StringComparison.OrdinalIgnoreCase))
-                   ?? _codec.SelfviewPipPositions.FirstOrDefault(o => string.Equals(o.Label, value, StringComparison.OrdinalIgnoreCase));
+            var options = GetOptions();
+            return options.FirstOrDefault(o => string.Equals(o.Command, value, StringComparison.OrdinalIgnoreCase))
+                ?? options.FirstOrDefault(o => string.Equals(o.Label, value, StringComparison.OrdinalIgnoreCase));
         }
 
         private void SendFullStatus(string id = null) =>
-            Task.Run(() => PostStatusMessage(new SelfviewPositionStateMessage
-            {
-                SelfviewPipPosition = _codec.SelfviewPipPositionFeedback.StringValue,
-                AvailablePositions = _codec.SelfviewPipPositions?
-                    .Select(o => new SelfviewOption { Command = o.Command, Label = o.Label }).ToList()
-            }, id));
+            Task.Run(() => PostStatusMessage(BuildFullStatus(), id));
     }
 
+    // ── Position messenger ──────────────────────────────────────────────────────
+
     /// <summary>
-    /// Status payload for <see cref="IHasSelfviewPositionMessenger"/>.
+    /// Mobile Control messenger for selfview PiP position.
     /// </summary>
+    public class IHasSelfviewPositionMessenger : SelfviewOptionMessengerBase
+    {
+        public IHasSelfviewPositionMessenger(string key, string messagePath, ZoomRoomDevice codec)
+            : base(key, messagePath, codec) { }
+
+        protected override string ToggleAction  => "/toggleSelfviewPosition";
+        protected override string SetAction     => "/setSelfviewPosition";
+        protected override void ExecuteToggle() => _codec.SelfviewPipPositionToggle();
+        protected override void ExecuteSet(CodecCommandWithLabel cmd) => _codec.SelfviewPipPositionSet(cmd);
+        protected override StringFeedback GetFeedback()               => _codec.SelfviewPipPositionFeedback;
+        protected override IEnumerable<CodecCommandWithLabel> GetOptions() => _codec.SelfviewPipPositions ?? Enumerable.Empty<CodecCommandWithLabel>();
+
+        protected override DeviceStateMessageBase BuildFullStatus() =>
+            new SelfviewPositionStateMessage
+            {
+                SelfviewPipPosition = _codec.SelfviewPipPositionFeedback.StringValue,
+                AvailablePositions  = GetOptions().Select(o => new SelfviewOption { Command = o.Command, Label = o.Label }).ToList()
+            };
+
+        protected override DeviceStateMessageBase BuildChangedStatus(string newValue) =>
+            new SelfviewPositionStateMessage { SelfviewPipPosition = newValue };
+    }
+
+    /// <summary>Status payload for <see cref="IHasSelfviewPositionMessenger"/>.</summary>
     public class SelfviewPositionStateMessage : DeviceStateMessageBase
     {
         [JsonProperty("selfviewPipPosition", NullValueHandling = NullValueHandling.Ignore)]
