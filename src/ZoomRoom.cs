@@ -657,7 +657,7 @@ Cameras = new List<IHasCameraControls>();
             {
                 // Surface init failures (bad/missing SdkConfigPath, native wrapper load failure, etc.)
                 // instead of silently proceeding as if the SDK were ready. _isConnected stays false,
-                // so command methods are gated off (see EnsureConnected) and the comms monitor stays offline.
+                // so command methods are gated off (ZrcSdkController.Guard) and the comms monitor stays offline.
                 this.LogError("ZRC SDK controller failed to initialize (sdkConfigPath=\"{Path}\"). Device will not be functional.", _props.SdkConfigPath);
             }
 	    }
@@ -710,15 +710,6 @@ Cameras = new List<IHasCameraControls>();
                 lock (_directoryLock) _directoryContactsById.Clear();
                 PhonebookSyncState.CodecDisconnected();
             }
-        }
-
-        // Readiness gate for outbound commands. Returns false (and logs) when the SDK is not yet
-        // Connected/Established, so callers can no-op instead of firing a command the SDK will reject.
-        private bool EnsureConnected(string operation)
-        {
-            if (_isConnected) return true;
-            this.LogWarning("{Operation} ignored: ZRC SDK is not connected yet.", operation);
-            return false;
         }
 
         // Reads the current room speaker volume once on connect so the volume feedback reflects
@@ -1550,14 +1541,12 @@ Cameras = new List<IHasCameraControls>();
 
 		public override void Dial(Meeting meeting)
 		{
-			if (!EnsureConnected("Dial(meeting)")) return;
 			this.LogInformation("Dialing meeting.Id: {MeetingId} Title: {MeetingTitle}", meeting.Id, meeting.Title);
 			_controller.JoinMeeting(meeting.Id);
 		}
 
 		public override void Dial(string number)
 		{
-			if (!EnsureConnected("Dial(number)")) return;
 			this.LogDebug("Dialing number: {Number}", number);
 			_controller.JoinMeeting(number);
 		}
@@ -1567,7 +1556,6 @@ Cameras = new List<IHasCameraControls>();
         /// </summary>
         public void Dial(string number, string password)
         {
-            if (!EnsureConnected("Dial(number,password)")) return;
             this.LogDebug("Dialing meeting number: {Number} with password: {Password}", number, password);
             _controller.JoinMeetingWithPassword(number, password);
         }
@@ -1579,8 +1567,6 @@ Cameras = new List<IHasCameraControls>();
 		/// <param name="contact"></param>
 		public override void Dial(IInvitableContact contact)
 		{
-			if (!EnsureConnected("Dial(contact)")) return;
-
             var ic = contact as InvitableDirectoryContact;
 
 			if (ic == null || string.IsNullOrEmpty(ic.ContactId))
@@ -1609,7 +1595,6 @@ Cameras = new List<IHasCameraControls>();
         /// <param name="duration"></param>
         public void InviteContactsToNewMeeting(List<InvitableDirectoryContact> contacts, uint duration)
         {
-            if (!EnsureConnected("InviteContactsToNewMeeting")) return;
             var contactIds = GetContactIds(contacts);
             if (contactIds.Length == 0)
             {
@@ -1627,7 +1612,6 @@ Cameras = new List<IHasCameraControls>();
         /// <param name="contacts"></param>
         public void InviteContactsToExistingMeeting(List<InvitableDirectoryContact> contacts)
         {
-            if (!EnsureConnected("InviteContactsToExistingMeeting")) return;
             var contactIds = GetContactIds(contacts);
             if (contactIds.Length == 0)
             {
@@ -1685,7 +1669,6 @@ Cameras = new List<IHasCameraControls>();
         /// </summary>
         public void InviteContactById(string contactId)
         {
-            if (!EnsureConnected("InviteContactById")) return;
             if (string.IsNullOrEmpty(contactId))
             {
                 this.LogWarning("InviteContactById: no contactId supplied");
@@ -1717,7 +1700,6 @@ Cameras = new List<IHasCameraControls>();
         /// <param name="duration">duration of meeting</param>
         public void StartMeeting(uint duration)
         {
-            if (!EnsureConnected("StartMeeting")) return;
             _controller.StartInstantMeeting();
         }
 

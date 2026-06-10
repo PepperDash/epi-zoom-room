@@ -25,6 +25,7 @@ namespace PepperDash.Essentials.Plugins
         private CTimer _reconnectTimer;
         private int _reconnectAttempt;
         private const int MaxReconnectAttempts = 10;
+        private bool _isConnected;
         private static readonly int[] ReconnectDelaysMs = { 5000, 10000, 20000, 30000, 60000 };
 
         public string Key { get; }
@@ -215,12 +216,14 @@ namespace PepperDash.Essentials.Plugins
                 var state = (ConnectionState)e.ErrorCode;
                 if (state == ConnectionState.Disconnected)
                 {
+                    _isConnected = false;
                     // Disconnect mid-join: ExitMeeting won't fire, so clear any cached password here.
                     _pendingPassword = null;
                     ScheduleReconnect();
                 }
                 else if (state == ConnectionState.Connected || state == ConnectionState.Established)
                 {
+                    _isConnected = true;
                     // Successfully reconnected — cancel any pending retry and reset the counter.
                     CancelReconnect();
                 }
@@ -342,26 +345,27 @@ namespace PepperDash.Essentials.Plugins
 
         // ── Meeting ───────────────────────────────────────────────────────────
 
-        public bool StartMeeting(string meetingNumber)      => _sdk.StartMeeting(meetingNumber);
-        public bool StartInstantMeeting()                   => _sdk.StartInstantMeeting();
-        public bool StartMeetingWithHostKey(string hostKey) => _sdk.StartMeetingWithHostKey(hostKey);
-        public bool JoinMeeting(string meetingNumber)       => _sdk.JoinMeeting(meetingNumber);
+        public bool StartMeeting(string meetingNumber)      => Guard(nameof(StartMeeting)) && _sdk.StartMeeting(meetingNumber);
+        public bool StartInstantMeeting()                   => Guard(nameof(StartInstantMeeting)) && _sdk.StartInstantMeeting();
+        public bool StartMeetingWithHostKey(string hostKey) => Guard(nameof(StartMeetingWithHostKey)) && _sdk.StartMeetingWithHostKey(hostKey);
+        public bool JoinMeeting(string meetingNumber)       => Guard(nameof(JoinMeeting)) && _sdk.JoinMeeting(meetingNumber);
         public bool JoinMeetingWithPassword(string meetingNumber, string password)
         {
+            if (!Guard(nameof(JoinMeetingWithPassword))) return false;
             // Cache the password — it will be sent when MeetingNeedsPassword fires
             _pendingPassword = password;
             var result = _sdk.JoinMeeting(meetingNumber);
             if (!result) _pendingPassword = null; // sync rejection — ExitMeeting won't fire
             return result;
         }
-        public bool JoinMeetingWithUrl(string url)          => Rc(nameof(JoinMeetingWithUrl), _sdk.JoinMeetingWithURL(url));
-        public bool EndMeeting()                            => Rc(nameof(EndMeeting), _sdk.EndMeeting());
-        public bool LeaveMeeting()                          => Rc(nameof(LeaveMeeting), _sdk.LeaveMeeting());
-        public bool AnswerMeetingInvite(bool accept)        => Rc(nameof(AnswerMeetingInvite), _sdk.AnswerMeetingInvite(accept));
-        public bool SendMeetingPassword(string password)    => Rc(nameof(SendMeetingPassword), _sdk.SendMeetingPassword(password));
-        public bool CancelEnteringMeetingPassword()         => Rc(nameof(CancelEnteringMeetingPassword), _sdk.CancelEnteringMeetingPassword());
-        public bool CancelWaitingForHost()                  => Rc(nameof(CancelWaitingForHost), _sdk.CancelWaitingForHost());
-        public bool LockMeeting(bool locked)                => Rc(nameof(LockMeeting), _sdk.LockMeeting(locked));
+        public bool JoinMeetingWithUrl(string url)          => Guard(nameof(JoinMeetingWithUrl)) && Rc(nameof(JoinMeetingWithUrl), _sdk.JoinMeetingWithURL(url));
+        public bool EndMeeting()                            => Guard(nameof(EndMeeting)) && Rc(nameof(EndMeeting), _sdk.EndMeeting());
+        public bool LeaveMeeting()                          => Guard(nameof(LeaveMeeting)) && Rc(nameof(LeaveMeeting), _sdk.LeaveMeeting());
+        public bool AnswerMeetingInvite(bool accept)        => Guard(nameof(AnswerMeetingInvite)) && Rc(nameof(AnswerMeetingInvite), _sdk.AnswerMeetingInvite(accept));
+        public bool SendMeetingPassword(string password)    => Guard(nameof(SendMeetingPassword)) && Rc(nameof(SendMeetingPassword), _sdk.SendMeetingPassword(password));
+        public bool CancelEnteringMeetingPassword()         => Guard(nameof(CancelEnteringMeetingPassword)) && Rc(nameof(CancelEnteringMeetingPassword), _sdk.CancelEnteringMeetingPassword());
+        public bool CancelWaitingForHost()                  => Guard(nameof(CancelWaitingForHost)) && Rc(nameof(CancelWaitingForHost), _sdk.CancelWaitingForHost());
+        public bool LockMeeting(bool locked)                => Guard(nameof(LockMeeting)) && Rc(nameof(LockMeeting), _sdk.LockMeeting(locked));
 
         // ── SDK call result logging ─────────────────────────────────────────────
         // The SDK returns a ZRCSDKError (0 = success) or a bool; ZoomRoom otherwise discards it.
@@ -381,88 +385,98 @@ namespace PepperDash.Essentials.Plugins
             return ok;
         }
 
+        // Connection guard for outbound commands: returns false and logs when the SDK is not yet
+        // Connected/Established (#25 — centralised here so every command is gated uniformly
+        // instead of ad-hoc EnsureConnected() checks scattered across ZoomRoom).
+        private bool Guard(string op)
+        {
+            if (_isConnected) return true;
+            this.LogWarning("{Op} ignored: SDK not connected.", op);
+            return false;
+        }
+
         // ── Audio ─────────────────────────────────────────────────────────────
 
-        public bool SetAudioMute(bool mute)                    => Rc(nameof(SetAudioMute), _sdk.SetAudioMute(mute));
-        public bool MuteUserAudio(int userId, bool mute)       => Rc(nameof(MuteUserAudio), _sdk.MuteUserAudio(userId, mute));
-        public bool MuteAllAudio(bool mute)                    => Rc(nameof(MuteAllAudio), _sdk.MuteAllAudio(mute));
-        public bool SetMuteOnEntry(bool mute)                  => Rc(nameof(SetMuteOnEntry), _sdk.SetMuteOnEntry(mute));
-        public bool AnswerUnmuteRequest(bool accepted)         => Rc(nameof(AnswerUnmuteRequest), _sdk.AnswerUnmuteRequest(accepted));
-        public bool AllowAttendeesUnmute(bool allow)           => Rc(nameof(AllowAttendeesUnmute), _sdk.AllowAttendeesUnmute(allow));
-        public bool SetSpeakerVolume(float volume)             => Rc(nameof(SetSpeakerVolume), _sdk.SetSpeakerVolume(volume));
+        public bool SetAudioMute(bool mute)                    => Guard(nameof(SetAudioMute)) && Rc(nameof(SetAudioMute), _sdk.SetAudioMute(mute));
+        public bool MuteUserAudio(int userId, bool mute)       => Guard(nameof(MuteUserAudio)) && Rc(nameof(MuteUserAudio), _sdk.MuteUserAudio(userId, mute));
+        public bool MuteAllAudio(bool mute)                    => Guard(nameof(MuteAllAudio)) && Rc(nameof(MuteAllAudio), _sdk.MuteAllAudio(mute));
+        public bool SetMuteOnEntry(bool mute)                  => Guard(nameof(SetMuteOnEntry)) && Rc(nameof(SetMuteOnEntry), _sdk.SetMuteOnEntry(mute));
+        public bool AnswerUnmuteRequest(bool accepted)         => Guard(nameof(AnswerUnmuteRequest)) && Rc(nameof(AnswerUnmuteRequest), _sdk.AnswerUnmuteRequest(accepted));
+        public bool AllowAttendeesUnmute(bool allow)           => Guard(nameof(AllowAttendeesUnmute)) && Rc(nameof(AllowAttendeesUnmute), _sdk.AllowAttendeesUnmute(allow));
+        public bool SetSpeakerVolume(float volume)             => Guard(nameof(SetSpeakerVolume)) && Rc(nameof(SetSpeakerVolume), _sdk.SetSpeakerVolume(volume));
         public float GetSpeakerVolume()                        => _sdk.GetSpeakerVolume(out var v) ? v : -1f;
 
         // ── Video ─────────────────────────────────────────────────────────────
 
-        public bool SetVideoState(bool start)                  => Rc(nameof(SetVideoState), _sdk.SetVideoState(start));
-        public bool MuteUserVideo(int userId, bool mute)       => Rc(nameof(MuteUserVideo), _sdk.MuteUserVideo(userId, mute));
-        public bool PinUserOnScreen(int userId, int screenIndex = 0)    => Rc(nameof(PinUserOnScreen), _sdk.PinUserOnScreen(userId, screenIndex));
-        public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => Rc(nameof(UnpinUserFromScreen), _sdk.UnpinUserFromScreen(userId, screenIndex));
-        public bool ControlUserCamera(int userId, int action, int type) => Rc(nameof(ControlUserCamera), _sdk.ControlUserCamera(userId, action, type));
-        public bool ControlCamera(string deviceId, int action, int type)    => Rc(nameof(ControlCamera), _sdk.ControlCamera(deviceId, action, type));
-        public bool ChangeSmartCameraMode(int mask, string deviceId = "")   => Rc(nameof(ChangeSmartCameraMode), _sdk.ChangeSmartCameraMode(mask, deviceId));
+        public bool SetVideoState(bool start)                  => Guard(nameof(SetVideoState)) && Rc(nameof(SetVideoState), _sdk.SetVideoState(start));
+        public bool MuteUserVideo(int userId, bool mute)       => Guard(nameof(MuteUserVideo)) && Rc(nameof(MuteUserVideo), _sdk.MuteUserVideo(userId, mute));
+        public bool PinUserOnScreen(int userId, int screenIndex = 0)    => Guard(nameof(PinUserOnScreen)) && Rc(nameof(PinUserOnScreen), _sdk.PinUserOnScreen(userId, screenIndex));
+        public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => Guard(nameof(UnpinUserFromScreen)) && Rc(nameof(UnpinUserFromScreen), _sdk.UnpinUserFromScreen(userId, screenIndex));
+        public bool ControlUserCamera(int userId, int action, int type) => Guard(nameof(ControlUserCamera)) && Rc(nameof(ControlUserCamera), _sdk.ControlUserCamera(userId, action, type));
+        public bool ControlCamera(string deviceId, int action, int type)    => Guard(nameof(ControlCamera)) && Rc(nameof(ControlCamera), _sdk.ControlCamera(deviceId, action, type));
+        public bool ChangeSmartCameraMode(int mask, string deviceId = "")   => Guard(nameof(ChangeSmartCameraMode)) && Rc(nameof(ChangeSmartCameraMode), _sdk.ChangeSmartCameraMode(mask, deviceId));
         public CameraDevice[] GetCameras()              => _sdk.GetCameras();
         public CameraDevice GetCurrentCamera()          => _sdk.TryGetCurrentCamera(out var cam) ? cam : null;
-        public bool SetCurrentCamera(string deviceId)   => Rc(nameof(SetCurrentCamera), _sdk.SetCurrentCamera(deviceId));
-        public bool SetCameraPreset(uint index, string deviceId)  => Rc(nameof(SetCameraPreset), _sdk.SetCameraPreset(index, deviceId ?? ""));
-        public bool GoToCameraPreset(uint index, string deviceId) => Rc(nameof(GoToCameraPreset), _sdk.GoToCameraPreset(index, deviceId ?? ""));
-        public bool NameCameraPreset(uint index, string name, string deviceId) => Rc(nameof(NameCameraPreset), _sdk.NameCameraPreset(index, name ?? "", deviceId ?? ""));
+        public bool SetCurrentCamera(string deviceId)   => Guard(nameof(SetCurrentCamera)) && Rc(nameof(SetCurrentCamera), _sdk.SetCurrentCamera(deviceId));
+        public bool SetCameraPreset(uint index, string deviceId)  => Guard(nameof(SetCameraPreset)) && Rc(nameof(SetCameraPreset), _sdk.SetCameraPreset(index, deviceId ?? ""));
+        public bool GoToCameraPreset(uint index, string deviceId) => Guard(nameof(GoToCameraPreset)) && Rc(nameof(GoToCameraPreset), _sdk.GoToCameraPreset(index, deviceId ?? ""));
+        public bool NameCameraPreset(uint index, string name, string deviceId) => Guard(nameof(NameCameraPreset)) && Rc(nameof(NameCameraPreset), _sdk.NameCameraPreset(index, name ?? "", deviceId ?? ""));
 
         // ── Layout ────────────────────────────────────────────────────────────
 
-        public int SetScreenLayout(int screen, int layoutSourceType) => Rc(nameof(SetScreenLayout), _sdk.SetScreenLayout(screen, layoutSourceType));
-        public int SetVideoOrder(int videoOrderType)                 => Rc(nameof(SetVideoOrder), _sdk.SetVideoOrder(videoOrderType));
-        public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => Rc(nameof(UpdateVideoLayoutStyle), _sdk.UpdateVideoLayoutStyle(videoLayoutStyle));
-        public int ControlVideoPosition(int position, int size)      => Rc(nameof(ControlVideoPosition), _sdk.ControlVideoPosition(position, size));
-        public int TurnVideoPage(bool forward, int pageVideoType)    => Rc(nameof(TurnVideoPage), _sdk.TurnVideoPage(forward, pageVideoType));
-        public int ChangeThumbnailsPosition(int type)                => Rc(nameof(ChangeThumbnailsPosition), _sdk.ChangeThumbnailsPosition(type));
-        public int SwitchToFloatingShareForSingleScreen(bool floatingShare) => Rc(nameof(SwitchToFloatingShareForSingleScreen), _sdk.SwitchToFloatingShareForSingleScreen(floatingShare));
+        public int SetScreenLayout(int screen, int layoutSourceType) => Guard(nameof(SetScreenLayout)) ? Rc(nameof(SetScreenLayout), _sdk.SetScreenLayout(screen, layoutSourceType)) : -1;
+        public int SetVideoOrder(int videoOrderType)                 => Guard(nameof(SetVideoOrder)) ? Rc(nameof(SetVideoOrder), _sdk.SetVideoOrder(videoOrderType)) : -1;
+        public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => Guard(nameof(UpdateVideoLayoutStyle)) ? Rc(nameof(UpdateVideoLayoutStyle), _sdk.UpdateVideoLayoutStyle(videoLayoutStyle)) : -1;
+        public int ControlVideoPosition(int position, int size)      => Guard(nameof(ControlVideoPosition)) ? Rc(nameof(ControlVideoPosition), _sdk.ControlVideoPosition(position, size)) : -1;
+        public int TurnVideoPage(bool forward, int pageVideoType)    => Guard(nameof(TurnVideoPage)) ? Rc(nameof(TurnVideoPage), _sdk.TurnVideoPage(forward, pageVideoType)) : -1;
+        public int ChangeThumbnailsPosition(int type)                => Guard(nameof(ChangeThumbnailsPosition)) ? Rc(nameof(ChangeThumbnailsPosition), _sdk.ChangeThumbnailsPosition(type)) : -1;
+        public int SwitchToFloatingShareForSingleScreen(bool floatingShare) => Guard(nameof(SwitchToFloatingShareForSingleScreen)) ? Rc(nameof(SwitchToFloatingShareForSingleScreen), _sdk.SwitchToFloatingShareForSingleScreen(floatingShare)) : -1;
 
         // ── Recording ─────────────────────────────────────────────────────────
 
-        public bool StartRecording()                               => Rc(nameof(StartRecording), _sdk.StartRecording());
-        public bool StopRecording()                                => Rc(nameof(StopRecording), _sdk.StopRecording());
-        public bool PauseRecording()                               => Rc(nameof(PauseRecording), _sdk.PauseRecording());
-        public bool ResumeRecording()                              => Rc(nameof(ResumeRecording), _sdk.ResumeRecording());
+        public bool StartRecording()                               => Guard(nameof(StartRecording)) && Rc(nameof(StartRecording), _sdk.StartRecording());
+        public bool StopRecording()                                => Guard(nameof(StopRecording)) && Rc(nameof(StopRecording), _sdk.StopRecording());
+        public bool PauseRecording()                               => Guard(nameof(PauseRecording)) && Rc(nameof(PauseRecording), _sdk.PauseRecording());
+        public bool ResumeRecording()                              => Guard(nameof(ResumeRecording)) && Rc(nameof(ResumeRecording), _sdk.ResumeRecording());
         public bool ResponseToRecordingRequest(bool accept, bool acceptAlways = false)
-            => Rc(nameof(ResponseToRecordingRequest), _sdk.ResponseToRecordingRequest(accept, acceptAlways));
+            => Guard(nameof(ResponseToRecordingRequest)) && Rc(nameof(ResponseToRecordingRequest), _sdk.ResponseToRecordingRequest(accept, acceptAlways));
 
         // ── Participants ──────────────────────────────────────────────────────
 
         public int GetParticipantCount() => _sdk.GetParticipantCount();
-        public bool ExpelUser(int userId)  => Rc(nameof(ExpelUser), _sdk.ExpelUser(userId));
-        public bool AssignHost(int userId) => Rc(nameof(AssignHost), _sdk.AssignHost(userId));
+        public bool ExpelUser(int userId)  => Guard(nameof(ExpelUser)) && Rc(nameof(ExpelUser), _sdk.ExpelUser(userId));
+        public bool AssignHost(int userId) => Guard(nameof(AssignHost)) && Rc(nameof(AssignHost), _sdk.AssignHost(userId));
 
         // ── Share ─────────────────────────────────────────────────────────────
 
-        public bool StopShare() => Rc(nameof(StopShare), _sdk.StopShare());
-        public bool LaunchSharingMeeting(bool isInLocalShare, int displayState) => Rc(nameof(LaunchSharingMeeting), _sdk.LaunchSharingMeeting(isInLocalShare, displayState));
-        public bool SwitchFromLocalPresentationToNormalMeeting()                => Rc(nameof(SwitchFromLocalPresentationToNormalMeeting), _sdk.SwitchFromLocalPresentationToNormalMeeting());
-        public bool ShowSharingInstruction(bool show, int instructionState)     => Rc(nameof(ShowSharingInstruction), _sdk.ShowSharingInstruction(show, instructionState));
-        public bool ShareBlackMagic(bool isStart, bool isViewLocally)           => Rc(nameof(ShareBlackMagic), _sdk.ShareBlackMagic(isStart, isViewLocally));
+        public bool StopShare() => Guard(nameof(StopShare)) && Rc(nameof(StopShare), _sdk.StopShare());
+        public bool LaunchSharingMeeting(bool isInLocalShare, int displayState) => Guard(nameof(LaunchSharingMeeting)) && Rc(nameof(LaunchSharingMeeting), _sdk.LaunchSharingMeeting(isInLocalShare, displayState));
+        public bool SwitchFromLocalPresentationToNormalMeeting()                => Guard(nameof(SwitchFromLocalPresentationToNormalMeeting)) && Rc(nameof(SwitchFromLocalPresentationToNormalMeeting), _sdk.SwitchFromLocalPresentationToNormalMeeting());
+        public bool ShowSharingInstruction(bool show, int instructionState)     => Guard(nameof(ShowSharingInstruction)) && Rc(nameof(ShowSharingInstruction), _sdk.ShowSharingInstruction(show, instructionState));
+        public bool ShareBlackMagic(bool isStart, bool isViewLocally)           => Guard(nameof(ShareBlackMagic)) && Rc(nameof(ShareBlackMagic), _sdk.ShareBlackMagic(isStart, isViewLocally));
 
         // ── Waiting room ──────────────────────────────────────────────────────
 
-        public bool AdmitUserFromWaitingRoom(int userId)  => Rc(nameof(AdmitUserFromWaitingRoom), _sdk.AdmitUserFromWaitingRoom(userId));
-        public bool AdmitAllFromWaitingRoom()             => Rc(nameof(AdmitAllFromWaitingRoom), _sdk.AdmitAllFromWaitingRoom());
-        public bool PutUserInWaitingRoom(int userId)      => Rc(nameof(PutUserInWaitingRoom), _sdk.PutUserInWaitingRoom(userId));
+        public bool AdmitUserFromWaitingRoom(int userId)  => Guard(nameof(AdmitUserFromWaitingRoom)) && Rc(nameof(AdmitUserFromWaitingRoom), _sdk.AdmitUserFromWaitingRoom(userId));
+        public bool AdmitAllFromWaitingRoom()             => Guard(nameof(AdmitAllFromWaitingRoom)) && Rc(nameof(AdmitAllFromWaitingRoom), _sdk.AdmitAllFromWaitingRoom());
+        public bool PutUserInWaitingRoom(int userId)      => Guard(nameof(PutUserInWaitingRoom)) && Rc(nameof(PutUserInWaitingRoom), _sdk.PutUserInWaitingRoom(userId));
 
         // ── SIP / Phone ───────────────────────────────────────────────────────
 
-        public bool TerminateSipCall(string callId)               => Rc(nameof(TerminateSipCall), _sdk.TerminateSIPCall(callId));
-        public bool CallSip(string uri)                           => Rc(nameof(CallSip), _sdk.CallSIP(uri));
-        public bool SendDtmfToSipCall(string dtmf, string callId) => Rc(nameof(SendDtmfToSipCall), _sdk.SendDTMFToSIPCall(dtmf, callId));
-        public bool CallOutPstnUser(string phoneNumber, bool cancelCall, bool hasVoicePrompt) => Rc(nameof(CallOutPstnUser), _sdk.CallOutPSTNUser(phoneNumber, cancelCall, hasVoicePrompt));
+        public bool TerminateSipCall(string callId)               => Guard(nameof(TerminateSipCall)) && Rc(nameof(TerminateSipCall), _sdk.TerminateSIPCall(callId));
+        public bool CallSip(string uri)                           => Guard(nameof(CallSip)) && Rc(nameof(CallSip), _sdk.CallSIP(uri));
+        public bool SendDtmfToSipCall(string dtmf, string callId) => Guard(nameof(SendDtmfToSipCall)) && Rc(nameof(SendDtmfToSipCall), _sdk.SendDTMFToSIPCall(dtmf, callId));
+        public bool CallOutPstnUser(string phoneNumber, bool cancelCall, bool hasVoicePrompt) => Guard(nameof(CallOutPstnUser)) && Rc(nameof(CallOutPstnUser), _sdk.CallOutPSTNUser(phoneNumber, cancelCall, hasVoicePrompt));
 
         // ── Contacts / Directory ──────────────────────────────────────────────
 
-        public bool SubscribeContacts(int startIndex, int count, bool searchSip) => Rc(nameof(SubscribeContacts), _sdk.SubscribeContacts(startIndex, count, searchSip));
-        public bool InviteAttendees(string[] contactIds)                          => Rc(nameof(InviteAttendees), _sdk.InviteAttendees(contactIds));
-        public bool MeetWithIMUsers(string[] contactIds)                          => Rc(nameof(MeetWithIMUsers), _sdk.MeetWithIMUsers(contactIds));
+        public bool SubscribeContacts(int startIndex, int count, bool searchSip) => Guard(nameof(SubscribeContacts)) && Rc(nameof(SubscribeContacts), _sdk.SubscribeContacts(startIndex, count, searchSip));
+        public bool InviteAttendees(string[] contactIds)                          => Guard(nameof(InviteAttendees)) && Rc(nameof(InviteAttendees), _sdk.InviteAttendees(contactIds));
+        public bool MeetWithIMUsers(string[] contactIds)                          => Guard(nameof(MeetWithIMUsers)) && Rc(nameof(MeetWithIMUsers), _sdk.MeetWithIMUsers(contactIds));
 
         // ── Bookings / Schedule ────────────────────────────────────────────────
 
-        public bool ListMeeting() => Rc(nameof(ListMeeting), _sdk.ListMeeting());
+        public bool ListMeeting() => Guard(nameof(ListMeeting)) && Rc(nameof(ListMeeting), _sdk.ListMeeting());
 
         // ── ZRCS ──────────────────────────────────────────────────────────────
 
