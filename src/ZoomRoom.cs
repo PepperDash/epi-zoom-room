@@ -87,6 +87,11 @@ namespace PepperDash.Essentials.Plugins
         // rebuilt from the union of all batches received.
         private readonly object _directoryLock = new object();
         private readonly Dictionary<string, ContactInfo> _directoryContactsById = new Dictionary<string, ContactInfo>();
+        // Pagination state for phonebook downloads. The ZRC SDK contact subscribe is range-based;
+        // each SubscribeContacts(start, count) only notifies for that window. We keep subscribing
+        // to successive windows until a batch comes back with fewer entries than the page size.
+        private const int PhonebookPageSize = 50;
+        private int _phonebookNextStart;
         private IHasCameraControls _selectedCamera;
         private CodecDirectory _currentDirectoryResult;
 
@@ -725,7 +730,7 @@ namespace PepperDash.Essentials.Plugins
                 if (!_props.DisablePhonebookAutoDownload)
                 {
                     this.LogInformation("Requesting directory contacts (auto-download)");
-                    _controller.SubscribeContacts(0, 50, false);
+                    StartPhonebookFetch();
                 }
 
                 // Request the current schedule/bookings. Results arrive asynchronously via
@@ -1320,7 +1325,11 @@ namespace PepperDash.Essentials.Plugins
             // on the output side of the same join — input/output are independent). This is the only
             // trigger to load contacts when DisablePhonebookAutoDownload is set.
             trilist.SetSigFalseAction(joinMap.PhonebookGet.JoinNumber,
-                () => _controller.SubscribeContacts(0, 50, false));
+                () =>
+                {
+                    lock (_directoryLock) _directoryContactsById.Clear();
+                    StartPhonebookFetch();
+                });
 
             var meetingInfoCodec = this as IHasMeetingInfo;
             if (meetingInfoCodec != null)
@@ -1810,6 +1819,12 @@ namespace PepperDash.Essentials.Plugins
 		// Maps a batch of SDK contacts into the accumulated directory, rebuilds DirectoryRoot and
 		// publishes the result. The subscription delivers contacts in pages, so batches are merged
 		// by contact ID rather than replacing the whole directory each time.
+		private void StartPhonebookFetch()
+		{
+			_phonebookNextStart = 0;
+			_controller.SubscribeContacts(0, PhonebookPageSize, false);
+		}
+
 		private void OnControllerContactListChanged(object sender, ContactListEventArgs e)
 		{
 			if (e == null || e.Contacts == null) return;
@@ -1842,6 +1857,18 @@ namespace PepperDash.Essentials.Plugins
 			if (CurrentDirectoryResult == null || CurrentDirectoryResult.ResultsFolderId == "root")
 			{
 				CurrentDirectoryResult = DirectoryRoot;
+			}
+
+			// If the batch was exactly the page size there may be more contacts — request the next page.
+			if (e.Contacts.Length == PhonebookPageSize)
+			{
+				_phonebookNextStart += PhonebookPageSize;
+				this.LogDebug("Phonebook page complete — fetching next page at index {Start}", _phonebookNextStart);
+				_controller.SubscribeContacts(_phonebookNextStart, PhonebookPageSize, false);
+			}
+			else
+			{
+				this.LogInformation("Phonebook download complete: {Total} total contact(s)", directory.Contacts.Count);
 			}
 		}
 
