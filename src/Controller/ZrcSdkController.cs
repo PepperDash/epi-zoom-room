@@ -21,6 +21,10 @@ namespace PepperDash.Essentials.Plugins
         private bool _disposed;
         private bool _initialized;
         private string _pendingPassword;
+        private CTimer _reconnectTimer;
+        private int _reconnectAttempt;
+        private const int MaxReconnectAttempts = 10;
+        private static readonly int[] ReconnectDelaysMs = { 5000, 10000, 20000, 30000, 60000 };
 
         public string Key { get; }
 
@@ -178,9 +182,18 @@ namespace PepperDash.Essentials.Plugins
             _sdk.Initialized             += (s, e) => SafeRaise(() => Initialized?.Invoke(this, e));
             _sdk.ConnectionStateChanged  += (s, e) =>
             {
-                // Disconnect mid-join: ExitMeeting won't fire, so clear any cached password here.
-                if ((ConnectionState)e.ErrorCode == ConnectionState.Disconnected)
+                var state = (ConnectionState)e.ErrorCode;
+                if (state == ConnectionState.Disconnected)
+                {
+                    // Disconnect mid-join: ExitMeeting won't fire, so clear any cached password here.
                     _pendingPassword = null;
+                    ScheduleReconnect();
+                }
+                else if (state == ConnectionState.Connected || state == ConnectionState.Established)
+                {
+                    // Successfully reconnected — cancel any pending retry and reset the counter.
+                    CancelReconnect();
+                }
                 SafeRaise(() => ConnectionStateChanged?.Invoke(this, e));
             };
             _sdk.Error                   += (s, e) => SafeRaise(() => Error?.Invoke(this, e));
@@ -461,6 +474,7 @@ namespace PepperDash.Essentials.Plugins
         {
             if (_disposed) return;
             _disposed = true;
+            CancelReconnect();
             CrestronEnvironment.ProgramStatusEventHandler -= OnProgramStatusEvent;
             try
             {
@@ -471,6 +485,42 @@ namespace PepperDash.Essentials.Plugins
             {
                 this.LogError("Error disposing ZRC SDK: {Message}", ex.Message);
             }
+        }
+
+        private void ScheduleReconnect()
+        {
+            if (_disposed) return;
+            if (!_sdk.CanRetryToPairLastRoom())
+            {
+                this.LogWarning("Disconnected and no stored pairing credentials — cannot auto-reconnect.");
+                return;
+            }
+
+            _reconnectAttempt++;
+            if (_reconnectAttempt > MaxReconnectAttempts)
+            {
+                this.LogWarning("Auto-reconnect exceeded {Max} attempts — giving up. Use 'repairZoomRoom' to retry.", MaxReconnectAttempts);
+                return;
+            }
+
+            var delayMs = ReconnectDelaysMs[Math.Min(_reconnectAttempt - 1, ReconnectDelaysMs.Length - 1)];
+            this.LogInformation("Disconnected — scheduling reconnect attempt {Attempt}/{Max} in {Delay}ms",
+                _reconnectAttempt, MaxReconnectAttempts, delayMs);
+
+            _reconnectTimer?.Dispose();
+            _reconnectTimer = new CTimer(_ =>
+            {
+                if (_disposed) return;
+                this.LogInformation("Auto-reconnect attempt {Attempt}: calling RetryToPairRoom()", _reconnectAttempt);
+                _sdk.RetryToPairRoom();
+            }, null, delayMs);
+        }
+
+        private void CancelReconnect()
+        {
+            _reconnectAttempt = 0;
+            _reconnectTimer?.Dispose();
+            _reconnectTimer = null;
         }
     }
 }
