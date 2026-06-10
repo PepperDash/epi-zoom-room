@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using PepperDash.Essentials.AppServer;
+using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Devices.Common.VideoCodec;
 using ZoomRoomDevice = PepperDash.Essentials.Plugins.ZoomRoom;
 

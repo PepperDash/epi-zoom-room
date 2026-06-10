@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PepperDash.Essentials.AppServer;
+using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Devices.Common.VideoCodec;
 using ZoomRoomDevice = PepperDash.Essentials.Plugins.ZoomRoom;
 
