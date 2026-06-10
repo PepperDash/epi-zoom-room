@@ -176,7 +176,13 @@ namespace PepperDash.Essentials.Plugins
 
             // Wire all SDK events before calling Initialize so no events are missed
             _sdk.Initialized             += (s, e) => SafeRaise(() => Initialized?.Invoke(this, e));
-            _sdk.ConnectionStateChanged  += (s, e) => SafeRaise(() => ConnectionStateChanged?.Invoke(this, e));
+            _sdk.ConnectionStateChanged  += (s, e) =>
+            {
+                // Disconnect mid-join: ExitMeeting won't fire, so clear any cached password here.
+                if ((ConnectionState)e.ErrorCode == ConnectionState.Disconnected)
+                    _pendingPassword = null;
+                SafeRaise(() => ConnectionStateChanged?.Invoke(this, e));
+            };
             _sdk.Error                   += (s, e) => SafeRaise(() => Error?.Invoke(this, e));
             _sdk.PairRoomResult          += (s, e) =>
             {
@@ -300,7 +306,9 @@ namespace PepperDash.Essentials.Plugins
         {
             // Cache the password — it will be sent when MeetingNeedsPassword fires
             _pendingPassword = password;
-            return _sdk.JoinMeeting(meetingNumber);
+            var result = _sdk.JoinMeeting(meetingNumber);
+            if (!result) _pendingPassword = null; // sync rejection — ExitMeeting won't fire
+            return result;
         }
         public bool JoinMeetingWithUrl(string url)          => _sdk.JoinMeetingWithURL(url);
         public bool EndMeeting()                            => _sdk.EndMeeting();

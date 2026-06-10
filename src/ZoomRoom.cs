@@ -568,6 +568,7 @@ namespace PepperDash.Essentials.Plugins
 			// Set up output ports
 			OutputPorts.Add(Output1);
 			OutputPorts.Add(Output2);
+			OutputPorts.Add(Output3);
 		}
 
 		/// <summary>
@@ -731,6 +732,10 @@ namespace PepperDash.Essentials.Plugins
                 // MeetingListChanged and populate CodecSchedule.
                 this.LogInformation("Requesting meeting schedule (bookings)");
                 _controller.ListMeeting();
+
+                // Signal readiness: wires EISC camera joins (VideoCodecBase.LinkVideoCodecToApi)
+                // and unblocks MC /fullStatus (ZoomRoomMessenger.SendFullStatus gates on IsReady).
+                SetIsReady();
             }
             else if (!online)
             {
@@ -738,6 +743,9 @@ namespace PepperDash.Essentials.Plugins
                 ActiveCalls.Clear();
                 Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
                 OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
+
+                _recordConsentPromptIsVisible = false;
+                RecordConsentPromptIsVisible.FireUpdate();
 
                 lock (_directoryLock) _directoryContactsById.Clear();
                 PhonebookSyncState.CodecDisconnected();
@@ -874,6 +882,8 @@ namespace PepperDash.Essentials.Plugins
             _sdkHostName          = string.Empty;
             _sdkMeetingLocked     = false;
             _sdkIsRecording       = false;
+            _recordConsentPromptIsVisible = false;
+            RecordConsentPromptIsVisible.FireUpdate();
             _pinnedUserScreens.Clear();
             _pendingInviteCall    = null;
             ActiveCalls.Clear();
@@ -2941,7 +2951,7 @@ namespace PepperDash.Essentials.Plugins
 
         void OnPasswordRequired(bool lastAttemptIncorrect, bool loginFailed, bool loginCancelled, string message)
         {
-			_meetingPasswordRequired = !loginFailed || !loginCancelled;
+			_meetingPasswordRequired = !loginFailed && !loginCancelled;
 
             var handler = PasswordRequired;
             if (handler != null)
@@ -3103,6 +3113,8 @@ namespace PepperDash.Essentials.Plugins
 
         public void RecordingPromptAcknowledgement(bool agree)
         {
+            _recordConsentPromptIsVisible = false;
+            RecordConsentPromptIsVisible.FireUpdate();
             _controller.ResponseToRecordingRequest(agree);
         }
 
