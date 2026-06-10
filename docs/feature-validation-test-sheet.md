@@ -283,8 +283,8 @@ Have another Zoom client/room **invite this room** so an incoming call is ringin
 ```
 devjson {"deviceKey":"zoomRoom-1","methodName":"RejectCall","params":[]}
 ```
-- [x] **Validated on CP4N 2026-06-05** ✅ — `MeetingInvite received from "Anthony Lopez"` on arrival, then `RejectCall` **declined the call** (no `AnswerMeetingInvite returned failure`).
-- [x] (Optional) `AcceptCall` on a ringing invite → joins the meeting via `AnswerMeetingInvite(true)`. **Validated on CP4N 2026-06-05** ✅ — invite from "Anthony Lopez" (meetingNumber `82324986098`) arrived, `AcceptCall` → `ConnectingToMeeting → InMeeting`, no failure.
+- [x] **Validated on CP4N 2026-06-05** ✅ — `MeetingInvite received from "a test account"` on arrival, then `RejectCall` **declined the call** (no `AnswerMeetingInvite returned failure`).
+- [x] (Optional) `AcceptCall` on a ringing invite → joins the meeting via `AnswerMeetingInvite(true)`. **Validated on CP4N 2026-06-05** ✅ — invite from "a test account" (meetingNumber `8xxxxxxxx98`) arrived, `AcceptCall` → `ConnectingToMeeting → InMeeting`, no failure.
 - [x] (Optional) With **no** pending invite, the parameterless `RejectCall()` → **clean no-op** (validated CP4N 2026-06-05): it finds no ringing `ActiveCall` and **returns without calling the SDK** — no `-2`, no warning. (The native `No pending meeting invite` (-2) only occurs if the `RejectCall(call)` overload is invoked directly with a stale call, e.g. a touchpanel double-decline, which always calls `AnswerMeetingInvite(false)`.)
 
 ## 13. Directory + invite-by-contact (R-D / R-C)

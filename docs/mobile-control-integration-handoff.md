@@ -1,6 +1,6 @@
 # Zoom Room ↔ Mobile Control — integration handoff
 
-**To:** Neil (owns `epi-beincourt-room` + `beincourt-pv2-react-app`)
+**To:** Room plugin developer (owns the room EPI + React touchpanel app)
 **From:** Zoom Room EPI work (`epi-zoom-room`, branch `feature/v3-migration`)
 **Status:** for discussion / planning. The `epi-zoom-room` changes are **committed and CI-published**
 (`feature/v3-migration`, build 0/0, package `2.0.0-feature-v3-migration.3`) — pending hardware
@@ -51,23 +51,23 @@ React app ── reads roomState.configuration.videoCodecKey ─► /device/{vid
                     (only when the room implements IHasVideoCodec)
 ```
 
-Your React app **already reads `roomState.configuration`** (`CamerasAndDisplays.tsx:98` →
-`roomState.configuration.destinationList`), so codec discovery is essentially free once the room
+Your React app **already reads `roomState.configuration`** somewhere in the codebase →
+`roomState.configuration.destinationList`, so codec discovery is essentially free once the room
 advertises it.
 
 ---
 
 ## 3. What needs to happen — two edits in your repos
 
-### A) `epi-beincourt-room` — make `BeincourtRoom` an `IHasVideoCodec` room
-Today `BeincourtRoom` is `: EssentialsDevice, IEssentialsRoom`, so Essentials' `is IHasVideoCodec` test
+### A) `epi-example-room` — make `ExampleRoom` an `IHasVideoCodec` room
+Today `ExampleRoom` is `: EssentialsDevice, IEssentialsRoom`, so Essentials' `is IHasVideoCodec` test
 is false and `videoCodecKey` is **never published**. Also note the existing `ZoomStateMachine` is an
 **inert stub** — `eZoomTrigger.StartZoomMeeting/EndZoomMeeting` are declared in `.Permit(...)` but never
-`Fire`d, and `BeincourtRoomMessenger` exposes only `zoomState` (no `zoom*` data, no `/zoom/*` actions).
+`Fire`d, and `ExampleRoomMessenger` exposes only `zoomState` (no `zoom*` data, no `/zoom/*` actions).
 
 **Do:**
-- Add a config key for the Zoom codec device (e.g. `videoCodecKey`) to `BeincourtRoomConfig`.
-- Resolve it in `BeincourtRoom` (`DeviceManager.GetDeviceForKey<VideoCodecBase>(...)`).
+- Add a config key for the Zoom codec device (e.g. `videoCodecKey`) to `ExampleRoomConfig`.
+- Resolve it in `ExampleRoom` (`DeviceManager.GetDeviceForKey<VideoCodecBase>(...)`).
 - Implement **`IHasVideoCodec`** (`: IHasInCallFeedback, IPrivacy`): expose `VideoCodec`, plus the
   in-call / privacy feedbacks the interface requires.
 - (Optional) drive `zoomState` off the codec (e.g. `IHasMeetingInfo.MeetingInfoChanged` / call status)
@@ -76,10 +76,9 @@ is false and `videoCodecKey` is **never published**. Also note the existing `Zoo
 **Do NOT** build `/zoom/*` actions or `zoom*` room state — that's not the Essentials pattern and would
 duplicate the device messengers.
 
-### B) `beincourt-pv2-react-app` — point Zoom controls at the device, not the room
+### B) `example-react-app` — point Zoom controls at the device, not the room
 Today the Zoom UI calls `sendMessage('/room/{roomKey}/zoom/*')` and renders from a hard-coded
-`mockZoomState` (`ZoomControls.tsx`). Switch it to **device-direct**, the same pattern
-`src/components/shared/hooks/useMicParticipants.ts` already uses:
+`mockZoomState` (`ZoomControls.tsx`). Switch it to **device-direct**, the same device-subscription pattern your app already uses elsewhere:
 
 ```ts
 const cfgKey = roomState?.configuration?.videoCodecKey;     // discovered from Essentials
@@ -134,7 +133,7 @@ schedule via the core messenger (`/schedule/...`).
 
 ## 5. State mapping (app `roomState.zoom*` → device status in `s.devices[videoCodecKey]`)
 
-| App field (`BeincourtRoomState`) | Device status source | |
+| App field (`ExampleRoomState`) | Device status source | |
 |---|---|---|
 | `zoomParticipants` | `participants` (new `IHasParticipantsMessenger`) | ⚠️ shape differs (below) |
 | `zoomMeetings` | `meetings` (core schedule messenger `/schedule/...`) | ⚠️ codec `Meeting` ≠ `{ id, time, title }` |
@@ -202,12 +201,12 @@ App `ZoomParticipant` ← codec `Participant`:
 
 ## 7. Checklist
 
-**`epi-beincourt-room` (Neil):**
-- [ ] Add `videoCodecKey` (codec device key) to `BeincourtRoomConfig`; resolve in `BeincourtRoom`.
+**`epi-example-room` (downstream):**
+- [ ] Add `videoCodecKey` (codec device key) to `ExampleRoomConfig`; resolve in `ExampleRoom`.
 - [ ] Implement `IHasVideoCodec` (+ `IHasInCallFeedback`, `IPrivacy`) exposing the Zoom codec.
 - [ ] (Optional) drive/keep `zoomState` from codec events; otherwise let the app derive it.
 
-**`beincourt-pv2-react-app` (Neil):**
+**`example-react-app` (downstream):**
 - [ ] Read `roomState.configuration.videoCodecKey` for discovery.
 - [ ] Replace `mockZoomState` with `s.devices[videoCodecKey]`.
 - [ ] Rewrite `/room/{roomKey}/zoom/*` calls → `/device/{videoCodecKey}/*` per §4.
