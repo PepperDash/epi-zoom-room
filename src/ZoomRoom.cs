@@ -633,10 +633,14 @@ Cameras = new List<IHasCameraControls>();
             _controller.MeetingRecordingInfoChanged += OnControllerMeetingRecordingInfoChanged;
             _controller.CameraPresetInfoChanged  += OnControllerCameraPresetInfoChanged;
             _controller.RecordingRequestReceived += OnControllerRecordingRequestReceived;
-            _controller.ParticipantsInitialized  += OnControllerParticipantsInitialized;
-            _controller.UserJoined               += OnControllerUserJoined;
-            _controller.UserLeft                 += OnControllerUserLeft;
-            _controller.UserUpdated              += OnControllerUserUpdated;
+            _controller.ParticipantsInitialized  += OnControllerParticipantEvent;
+            _controller.UserJoined               += OnControllerParticipantEvent;
+            // UserLeft and UserUpdated: the ZRC SDK (.22) routes all roster changes through
+            // UserJoined with different NeedCleanUp/payload combinations; UserLeft and UserUpdated
+            // are never raised. Wire them defensively so they behave correctly if the SDK ever
+            // starts using them.
+            _controller.UserLeft                 += (s, e) => ApplyParticipantEvent(e, isLeaveEvent: true);
+            _controller.UserUpdated              += OnControllerParticipantEvent;
             // ParticipantCountChanged is NOT subscribed here: the SDK fires both
             // the participant-list callback and the count callback for every join/leave/update.
             // UserJoined/Left/Updated already call Participants.OnParticipantsChanged(), so
@@ -914,97 +918,56 @@ Cameras = new List<IHasCameraControls>();
             RecordConsentPromptIsVisible.FireUpdate();
         }
 
-        private void OnControllerParticipantsInitialized(object sender, ParticipantListEventArgs e)
+        // ── Unified participant event handler ─────────────────────────────────────
+        // All four SDK participant events (Initialized, UserJoined, UserLeft, UserUpdated)
+        // are routed here. In SDK .22 only ParticipantsInitialized and UserJoined are raised
+        // (all roster changes arrive via UserJoined); UserLeft and UserUpdated are dead but wired
+        // defensively. UserLeft is routed with isLeaveEvent=true via a lambda at the call site (#22).
+
+        private void OnControllerParticipantEvent(object sender, ParticipantListEventArgs e)
         {
             if (e?.Participants == null) return;
-            LogIncomingParticipantRoles("ParticipantsInitialized", e);
-            lock (_participantLock)
-            {
-                Participants.CurrentParticipants = MapParticipants(e.Participants);
-                TrackParticipantInfo(e.Participants, fullReplace: true, isLeave: false);
-            }
-            RefreshHostFromParticipants();
-            UpdateFarEndCameras();
+            LogIncomingParticipantRoles(sender?.GetType().Name ?? "unknown", e);
+            ApplyParticipantEvent(e, isLeaveEvent: false);
         }
 
-        private void OnControllerUserJoined(object sender, ParticipantListEventArgs e)
+        private void ApplyParticipantEvent(ParticipantListEventArgs e, bool isLeaveEvent)
         {
-            if (e?.Participants == null) return;
-            LogIncomingParticipantRoles("UserJoined", e);
             lock (_participantLock)
             {
                 if (e.NeedCleanUp)
                 {
+                    // Full roster replace (used by ParticipantsInitialized and clean-up UserJoined).
                     Participants.CurrentParticipants = MapParticipants(e.Participants);
+                    TrackParticipantInfo(e.Participants, fullReplace: true, isLeave: false);
+                }
+                else if (isLeaveEvent)
+                {
+                    // UserLeft: remove named participants.
+                    foreach (var info in e.Participants)
+                    {
+                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
+                        if (existing != null) Participants.CurrentParticipants.Remove(existing);
+                    }
+                    TrackParticipantInfo(e.Participants, fullReplace: false, isLeave: true);
                 }
                 else
                 {
+                    // UserJoined / UserUpdated: add or update in place.
+                    // The SDK re-sends a participant via UserJoined when their role changes (e.g.
+                    // co-host promotion), so an already-present participant must be updated, not ignored.
                     foreach (var info in e.Participants)
                     {
                         var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
                         if (existing == null)
                             Participants.CurrentParticipants.Add(MapParticipant(info));
                         else
-                            // The SDK re-sends a participant via UserJoined when their role changes
-                            // (e.g. a co-host promotion arrives this way, not via UserUpdated), so an
-                            // already-present participant must be updated in place, not ignored.
                             UpdateParticipantFrom(existing, info);
                     }
+                    TrackParticipantInfo(e.Participants, fullReplace: false, isLeave: false);
                 }
-                TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
             }
-            Participants.OnParticipantsChanged();
-            RefreshHostFromParticipants();
-            UpdateFarEndCameras();
-        }
 
-        private void OnControllerUserLeft(object sender, ParticipantListEventArgs e)
-        {
-            if (e?.Participants == null) return;
-            lock (_participantLock)
-            {
-                if (e.NeedCleanUp)
-                {
-                    Participants.CurrentParticipants = MapParticipants(e.Participants);
-                }
-                else
-                {
-                    foreach (var info in e.Participants)
-                    {
-                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                        if (existing != null)
-                            Participants.CurrentParticipants.Remove(existing);
-                    }
-                }
-                // On a clean-up event e.Participants is the remaining full roster; otherwise it lists who left.
-                TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: !e.NeedCleanUp);
-            }
-            Participants.OnParticipantsChanged();
-            RefreshHostFromParticipants();
-            UpdateFarEndCameras();
-        }
-
-        private void OnControllerUserUpdated(object sender, ParticipantListEventArgs e)
-        {
-            if (e?.Participants == null) return;
-            LogIncomingParticipantRoles("UserUpdated", e);
-            lock (_participantLock)
-            {
-                if (e.NeedCleanUp)
-                {
-                    Participants.CurrentParticipants = MapParticipants(e.Participants);
-                }
-                else
-                {
-                    foreach (var info in e.Participants)
-                    {
-                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                        if (existing != null)
-                            UpdateParticipantFrom(existing, info);
-                    }
-                }
-                TrackParticipantInfo(e.Participants, fullReplace: e.NeedCleanUp, isLeave: false);
-            }
             Participants.OnParticipantsChanged();
             RefreshHostFromParticipants();
             UpdateFarEndCameras();
