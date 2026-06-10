@@ -1796,7 +1796,7 @@ Cameras = new List<IHasCameraControls>();
 				directory.AddContactsToDirectory(
 					_directoryContactsById.Values.Select(c => (DirectoryItem)MapDirectoryContact(c)).ToList());
 
-				this.LogInformation("Phonebook download complete: {Total} total contact(s)", directory.Contacts.Count);
+				this.LogDebug("Phonebook download complete: {Total} total contact(s)", directory.Contacts.Count);
 
 				DirectoryRoot = directory;
 
