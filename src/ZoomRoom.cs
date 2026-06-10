@@ -48,9 +48,6 @@ namespace PepperDash.Essentials.Plugins
         private bool _sdkCanRecord; // room "can start recording" — from MeetingRecordingInfo.canIRecord
         private bool _sdkMeetingLocked;
         private bool _sdkIsHost;
-        // SDK gap: ZrcSdk does not surface a host-name event; _sdkHostName stays empty.
-        // If the SDK adds a HostChanged payload in a future version, populate it there.
-        private string _sdkHostName = string.Empty;
         private int  _sdkSharingState; // 0 = not sharing
         // The ZRC SDK does not expose per-participant pin state, so we track what THIS room pinned
         // (best-effort) to drive ToggleParticipantPinState. Keyed by userId -> screenIndex.
@@ -154,9 +151,7 @@ namespace PepperDash.Essentials.Plugins
 			// TODO: #714 [ ] SelfviewPipSizeFeedback
 			SelfviewPipSizeFeedback = new StringFeedback(SelfviewPipSizeFeedbackFunc);
 
-			SetUpFeedbackActions();
-
-			Cameras = new List<IHasCameraControls>();
+Cameras = new List<IHasCameraControls>();
 
 			// Initialized here (not in SetUpCameras, which only runs once connected) so the
 			// SelectedCamera setter never dereferences a null feedback.
@@ -192,14 +187,9 @@ namespace PepperDash.Essentials.Plugins
             SetUpRouting();
 		}
 
-		public CommunicationGather PortGather { get; private set; }
-
 		public ZoomRoomStatus Status { get; private set; }
 
 		public ZoomRoomConfiguration Configuration { get; private set; }
-
-		//CTimer LoginMessageReceivedTimer;
-		//CTimer RetryConnectionTimer;
 
 		// Periodic booking refresh — polls ListMeeting() on a fixed interval while connected.
 		// The ZRC SDK has no "calendar changed" push event; polling is the only mechanism.
@@ -247,22 +237,6 @@ namespace PepperDash.Essentials.Plugins
 		{
 			get { return () => _sdkSpeakerMuted; } // room audio-output mute (volume zeroed)
 		}
-
-		//protected Func<bool> RoomIsOccupiedFeedbackFunc
-		//{
-		//    get
-		//    {
-		//        return () => false;
-		//    }
-		//}
-
-		//protected Func<int> PeopleCountFeedbackFunc
-		//{
-		//    get
-		//    {
-		//        return () => 0;
-		//    }
-		//}
 
 		protected Func<bool> SelfViewIsOnFeedbackFunc
 		{
@@ -527,35 +501,6 @@ namespace PepperDash.Essentials.Plugins
 		#endregion
 
 
-
-        private void SetUpCallFeedbackActions() { /* No-op: feedback driven by SDK events */ }
-
-        private void HandleCallRecordInfoStateUpdate(object sender, PropertyChangedEventArgs a)
-        {
-            MeetingIsRecordingFeedback.FireUpdate();
-        }
-
-        private void HandleCallStateUpdate(object sender, PropertyChangedEventArgs a)
-        {
-            // No-op: call state driven by SDK events
-        }
-
-	    private void HandleSharingStateUpdate(object sender, PropertyChangedEventArgs a)
-	    {
-            SharingContentIsOnFeedback.FireUpdate();
-            ReceivingContent.FireUpdate();
-	    }
-
-		/// <summary>
-		/// Subscribes to the PropertyChanged events on the state objects and fires the corresponding feedbacks.
-		/// </summary>
-		private void SetUpFeedbackActions()
-		{
-            // All feedbacks are now driven by SDK events (see OnController* handlers).
-            // The legacy Configuration.*/Status.* PropertyChanged subscriptions have been removed
-            // because those models are no longer fed now that the JSON-over-SSH pipeline is gone.
-            SetUpCallFeedbackActions();
-		}
 
 		private void SetUpDirectory()
 		{
@@ -881,7 +826,7 @@ namespace PepperDash.Essentials.Plugins
             _currentMeetingNumber = string.Empty;
             _currentMeetingName   = string.Empty;
             _sdkIsHost            = false;
-            _sdkHostName          = string.Empty;
+
             _sdkMeetingLocked     = false;
             _sdkIsRecording       = false;
             _sdkCanRecord         = false;
@@ -3090,7 +3035,7 @@ namespace PepperDash.Essentials.Plugins
             MeetingInfo = new MeetingInfo(
                 _currentMeetingId,
                 _currentMeetingName,
-                _sdkHostName,
+                string.Empty, // host name: SDK gap — ZrcSdk does not surface a host-name event
                 string.Empty,
                 "None",
                 _sdkIsHost,
