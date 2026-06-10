@@ -690,7 +690,10 @@ namespace PepperDash.Essentials.Plugins
             _controller.UserJoined               += OnControllerUserJoined;
             _controller.UserLeft                 += OnControllerUserLeft;
             _controller.UserUpdated              += OnControllerUserUpdated;
-            _controller.ParticipantCountChanged  += (s, e) => Participants.OnParticipantsChanged();
+            // ParticipantCountChanged is NOT subscribed here: the SDK fires both
+            // the participant-list callback and the count callback for every join/leave/update.
+            // UserJoined/Left/Updated already call Participants.OnParticipantsChanged(), so
+            // a separate ParticipantCountChanged handler would double-publish the roster event.
             _controller.HostChanged              += OnControllerHostChanged;
             _controller.SharingStatusChanged     += OnControllerSharingStatusChanged;
             _controller.AirPlayStatusChanged     += OnControllerAirPlayStatusChanged;
