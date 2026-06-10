@@ -739,14 +739,7 @@ namespace PepperDash.Essentials.Plugins
             }
             else if (!online)
             {
-                // Reset in-call state on disconnect
-                ActiveCalls.Clear();
-                Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
-                OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
-
-                _recordConsentPromptIsVisible = false;
-                RecordConsentPromptIsVisible.FireUpdate();
-
+                ResetMeetingState();
                 lock (_directoryLock) _directoryContactsById.Clear();
                 PhonebookSyncState.CodecDisconnected();
             }
@@ -828,23 +821,7 @@ namespace PepperDash.Essentials.Plugins
                 case MeetingStatus.NotInMeeting:
                 case MeetingStatus.LoggedOut:
                 {
-                    _currentMeetingId     = string.Empty;
-                    _currentMeetingNumber = string.Empty;
-                    _currentMeetingName   = string.Empty;
-                    _sdkIsHost            = false;
-                    _sdkHostName          = string.Empty;
-                    _pendingInviteCall    = null;
-                    if (ActiveCalls.Count > 0)
-                    {
-                        var call = ActiveCalls.FirstOrDefault();
-                        if (call != null)
-                        {
-                            call.Status = eCodecCallStatus.Disconnected;
-                            OnCallStatusChange(call);
-                            ActiveCalls.Remove(call);
-                        }
-                    }
-                    UpdateMeetingInfo();
+                    ResetMeetingState();
                     break;
                 }
             }
@@ -875,6 +852,15 @@ namespace PepperDash.Essentials.Plugins
         private void OnControllerExitMeeting(object sender, SdkEventArgs e)
         {
             this.LogInformation("ExitMeeting reason={Reason} ({Code})", (ExitMeetingReason)e.ErrorCode, e.ErrorCode);
+            ResetMeetingState();
+        }
+
+        /// <summary>
+        /// Resets all meeting-scoped state fields. Called from ExitMeeting, NotInMeeting/LoggedOut,
+        /// and disconnect paths so every meeting-end scenario leaves the device in a consistent clean state.
+        /// </summary>
+        private void ResetMeetingState()
+        {
             _currentMeetingId     = string.Empty;
             _currentMeetingNumber = string.Empty;
             _currentMeetingName   = string.Empty;
@@ -882,13 +868,20 @@ namespace PepperDash.Essentials.Plugins
             _sdkHostName          = string.Empty;
             _sdkMeetingLocked     = false;
             _sdkIsRecording       = false;
+            _sdkCanRecord         = false;
+            _sdkSharingState      = 0;
             _recordConsentPromptIsVisible = false;
             RecordConsentPromptIsVisible.FireUpdate();
-            lock (_participantLock) _pinnedUserScreens.Clear();
-            _pendingInviteCall    = null;
+            lock (_participantLock)
+            {
+                _pinnedUserScreens.Clear();
+                _participantInfoByUserId.Clear();
+                Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
+            }
+            _pendingInviteCall = null;
             ActiveCalls.Clear();
-            Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
             OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
+            UpdateFarEndCameras();
             UpdateMeetingInfo();
         }
 
