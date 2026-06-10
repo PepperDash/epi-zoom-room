@@ -324,14 +324,14 @@ namespace PepperDash.Essentials.Plugins
             if (!result) _pendingPassword = null; // sync rejection — ExitMeeting won't fire
             return result;
         }
-        public bool JoinMeetingWithUrl(string url)          => _sdk.JoinMeetingWithURL(url);
-        public bool EndMeeting()                            => _sdk.EndMeeting();
-        public bool LeaveMeeting()                          => _sdk.LeaveMeeting();
+        public bool JoinMeetingWithUrl(string url)          => Rc(nameof(JoinMeetingWithUrl), _sdk.JoinMeetingWithURL(url));
+        public bool EndMeeting()                            => Rc(nameof(EndMeeting), _sdk.EndMeeting());
+        public bool LeaveMeeting()                          => Rc(nameof(LeaveMeeting), _sdk.LeaveMeeting());
         public bool AnswerMeetingInvite(bool accept)        => Rc(nameof(AnswerMeetingInvite), _sdk.AnswerMeetingInvite(accept));
-        public bool SendMeetingPassword(string password)    => _sdk.SendMeetingPassword(password);
-        public bool CancelEnteringMeetingPassword()         => _sdk.CancelEnteringMeetingPassword();
-        public bool CancelWaitingForHost()                  => _sdk.CancelWaitingForHost();
-        public bool LockMeeting(bool locked)                => _sdk.LockMeeting(locked);
+        public bool SendMeetingPassword(string password)    => Rc(nameof(SendMeetingPassword), _sdk.SendMeetingPassword(password));
+        public bool CancelEnteringMeetingPassword()         => Rc(nameof(CancelEnteringMeetingPassword), _sdk.CancelEnteringMeetingPassword());
+        public bool CancelWaitingForHost()                  => Rc(nameof(CancelWaitingForHost), _sdk.CancelWaitingForHost());
+        public bool LockMeeting(bool locked)                => Rc(nameof(LockMeeting), _sdk.LockMeeting(locked));
 
         // ── SDK call result logging ─────────────────────────────────────────────
         // The SDK returns a ZRCSDKError (0 = success) or a bool; ZoomRoom otherwise discards it.
@@ -353,18 +353,18 @@ namespace PepperDash.Essentials.Plugins
 
         // ── Audio ─────────────────────────────────────────────────────────────
 
-        public bool SetAudioMute(bool mute)                    => _sdk.SetAudioMute(mute);
+        public bool SetAudioMute(bool mute)                    => Rc(nameof(SetAudioMute), _sdk.SetAudioMute(mute));
         public bool MuteUserAudio(int userId, bool mute)       => Rc(nameof(MuteUserAudio), _sdk.MuteUserAudio(userId, mute));
         public bool MuteAllAudio(bool mute)                    => Rc(nameof(MuteAllAudio), _sdk.MuteAllAudio(mute));
-        public bool SetMuteOnEntry(bool mute)                  => _sdk.SetMuteOnEntry(mute);
-        public bool AnswerUnmuteRequest(bool accepted)         => _sdk.AnswerUnmuteRequest(accepted);
-        public bool AllowAttendeesUnmute(bool allow)           => _sdk.AllowAttendeesUnmute(allow);
+        public bool SetMuteOnEntry(bool mute)                  => Rc(nameof(SetMuteOnEntry), _sdk.SetMuteOnEntry(mute));
+        public bool AnswerUnmuteRequest(bool accepted)         => Rc(nameof(AnswerUnmuteRequest), _sdk.AnswerUnmuteRequest(accepted));
+        public bool AllowAttendeesUnmute(bool allow)           => Rc(nameof(AllowAttendeesUnmute), _sdk.AllowAttendeesUnmute(allow));
         public bool SetSpeakerVolume(float volume)             => Rc(nameof(SetSpeakerVolume), _sdk.SetSpeakerVolume(volume));
         public float GetSpeakerVolume()                        => _sdk.GetSpeakerVolume(out var v) ? v : -1f;
 
         // ── Video ─────────────────────────────────────────────────────────────
 
-        public bool SetVideoState(bool start)                  => _sdk.SetVideoState(start);
+        public bool SetVideoState(bool start)                  => Rc(nameof(SetVideoState), _sdk.SetVideoState(start));
         public bool MuteUserVideo(int userId, bool mute)       => Rc(nameof(MuteUserVideo), _sdk.MuteUserVideo(userId, mute));
         public bool PinUserOnScreen(int userId, int screenIndex = 0)    => Rc(nameof(PinUserOnScreen), _sdk.PinUserOnScreen(userId, screenIndex));
         public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => Rc(nameof(UnpinUserFromScreen), _sdk.UnpinUserFromScreen(userId, screenIndex));
@@ -390,12 +390,12 @@ namespace PepperDash.Essentials.Plugins
 
         // ── Recording ─────────────────────────────────────────────────────────
 
-        public bool StartRecording()                               => _sdk.StartRecording();
-        public bool StopRecording()                                => _sdk.StopRecording();
-        public bool PauseRecording()                               => _sdk.PauseRecording();
-        public bool ResumeRecording()                              => _sdk.ResumeRecording();
+        public bool StartRecording()                               => Rc(nameof(StartRecording), _sdk.StartRecording());
+        public bool StopRecording()                                => Rc(nameof(StopRecording), _sdk.StopRecording());
+        public bool PauseRecording()                               => Rc(nameof(PauseRecording), _sdk.PauseRecording());
+        public bool ResumeRecording()                              => Rc(nameof(ResumeRecording), _sdk.ResumeRecording());
         public bool ResponseToRecordingRequest(bool accept, bool acceptAlways = false)
-            => _sdk.ResponseToRecordingRequest(accept, acceptAlways);
+            => Rc(nameof(ResponseToRecordingRequest), _sdk.ResponseToRecordingRequest(accept, acceptAlways));
 
         // ── Participants ──────────────────────────────────────────────────────
 
@@ -413,9 +413,9 @@ namespace PepperDash.Essentials.Plugins
 
         // ── Waiting room ──────────────────────────────────────────────────────
 
-        public bool AdmitUserFromWaitingRoom(int userId)  => _sdk.AdmitUserFromWaitingRoom(userId);
-        public bool AdmitAllFromWaitingRoom()             => _sdk.AdmitAllFromWaitingRoom();
-        public bool PutUserInWaitingRoom(int userId)      => _sdk.PutUserInWaitingRoom(userId);
+        public bool AdmitUserFromWaitingRoom(int userId)  => Rc(nameof(AdmitUserFromWaitingRoom), _sdk.AdmitUserFromWaitingRoom(userId));
+        public bool AdmitAllFromWaitingRoom()             => Rc(nameof(AdmitAllFromWaitingRoom), _sdk.AdmitAllFromWaitingRoom());
+        public bool PutUserInWaitingRoom(int userId)      => Rc(nameof(PutUserInWaitingRoom), _sdk.PutUserInWaitingRoom(userId));
 
         // ── SIP / Phone ───────────────────────────────────────────────────────
 
