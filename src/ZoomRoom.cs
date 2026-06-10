@@ -1792,8 +1792,9 @@ Cameras = new List<IHasCameraControls>();
 		}
 
 		// Maps a batch of SDK contacts into the accumulated directory, rebuilds DirectoryRoot and
-		// publishes the result. The subscription delivers contacts in pages, so batches are merged
-		// by contact ID rather than replacing the whole directory each time.
+		// publishes the result on the final page only. The subscription delivers contacts in pages;
+		// intermediate pages only update _directoryContactsById without triggering a full rebuild
+		// or MC push so the per-page overhead on large directories is minimal (#30).
 		private void StartPhonebookFetch()
 		{
 			_phonebookNextStart = 0;
@@ -1823,7 +1824,8 @@ Cameras = new List<IHasCameraControls>();
 		{
 			if (e == null || e.Contacts == null) return;
 
-			CodecDirectory directory;
+			bool isLastPage = e.Contacts.Length < PhonebookPageSize;
+
 			lock (_directoryLock)
 			{
 				foreach (var c in e.Contacts)
@@ -1832,37 +1834,36 @@ Cameras = new List<IHasCameraControls>();
 					_directoryContactsById[c.ContactID] = c;
 				}
 
-				directory = new CodecDirectory { ResultsFolderId = "root" };
+				// Only rebuild DirectoryRoot and publish on the final page (#30).
+				// Intermediate pages update _directoryContactsById silently so the
+				// per-page LINQ rebuild + MC push doesn't compound with large directories.
+				if (!isLastPage)
+				{
+					_phonebookNextStart += PhonebookPageSize;
+					this.LogDebug("Phonebook page complete ({BatchCount} contacts) — fetching next page at index {Start}",
+						e.Contacts.Length, _phonebookNextStart);
+					_controller.SubscribeContacts(_phonebookNextStart, PhonebookPageSize, false);
+					return;
+				}
+
+				// Final page — build and publish.
+				var directory = new CodecDirectory { ResultsFolderId = "root" };
 				directory.AddContactsToDirectory(
 					_directoryContactsById.Values.Select(c => (DirectoryItem)MapDirectoryContact(c)).ToList());
-			}
 
-			this.LogDebug("Directory updated: {ContactCount} contact(s) (batch of {BatchCount})",
-				directory.Contacts.Count, e.Contacts.Length);
-
-			DirectoryRoot = directory;
-
-			PhonebookSyncState.SetPhonebookHasFolders(false);
-			PhonebookSyncState.InitialPhonebookFoldersReceived();
-			PhonebookSyncState.PhonebookRootEntriesReceived();
-			PhonebookSyncState.SetNumberOfContacts(directory.Contacts.Count);
-
-			// Refresh the current view if the user is browsing the root.
-			if (CurrentDirectoryResult == null || CurrentDirectoryResult.ResultsFolderId == "root")
-			{
-				CurrentDirectoryResult = DirectoryRoot;
-			}
-
-			// If the batch was exactly the page size there may be more contacts — request the next page.
-			if (e.Contacts.Length == PhonebookPageSize)
-			{
-				_phonebookNextStart += PhonebookPageSize;
-				this.LogDebug("Phonebook page complete — fetching next page at index {Start}", _phonebookNextStart);
-				_controller.SubscribeContacts(_phonebookNextStart, PhonebookPageSize, false);
-			}
-			else
-			{
 				this.LogInformation("Phonebook download complete: {Total} total contact(s)", directory.Contacts.Count);
+
+				DirectoryRoot = directory;
+
+				PhonebookSyncState.SetPhonebookHasFolders(false);
+				PhonebookSyncState.InitialPhonebookFoldersReceived();
+				PhonebookSyncState.PhonebookRootEntriesReceived();
+				PhonebookSyncState.SetNumberOfContacts(directory.Contacts.Count);
+
+				if (CurrentDirectoryResult == null || CurrentDirectoryResult.ResultsFolderId == "root")
+				{
+					CurrentDirectoryResult = DirectoryRoot;
+				}
 			}
 		}
 
