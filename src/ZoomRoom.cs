@@ -3031,9 +3031,27 @@ Cameras = new List<IHasCameraControls>();
         /// <summary>
         /// Builds a <see cref="MeetingInfo"/> from the current SDK state and assigns it,
         /// firing <see cref="MeetingInfoChanged"/> if the value has changed.
+        /// Field-compares against the last value before allocating so that callers who invoke
+        /// this on every small state transition don't generate spurious bridge/MC pushes (#33).
         /// </summary>
         private void UpdateMeetingInfo()
         {
+            // Compare constituent fields before allocating; MeetingInfo is a class (ref type) so
+            // value != _meetingInfo is always true for a freshly constructed object.
+            var cur = _meetingInfo;
+            var isSharing = _sdkSharingState > 0;
+            if (cur != null
+                && cur.Id           == _currentMeetingId
+                && cur.Name         == _currentMeetingName
+                && cur.IsHost       == _sdkIsHost
+                && cur.IsSharingMeeting == isSharing
+                && cur.IsLocked     == _sdkMeetingLocked
+                && cur.IsRecording  == _sdkIsRecording
+                && cur.CanRecord    == _sdkCanRecord)
+            {
+                return; // no field changed — skip allocation and event
+            }
+
             MeetingInfo = new MeetingInfo(
                 _currentMeetingId,
                 _currentMeetingName,
@@ -3041,7 +3059,7 @@ Cameras = new List<IHasCameraControls>();
                 string.Empty,
                 "None",
                 _sdkIsHost,
-                _sdkSharingState > 0,
+                isSharing,
                 false,
                 _sdkMeetingLocked,
                 _sdkIsRecording,
