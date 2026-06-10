@@ -870,6 +870,9 @@ namespace PepperDash.Essentials.Plugins
             _sdkIsRecording       = false;
             _sdkCanRecord         = false;
             _sdkSharingState      = 0;
+            _sdkPhoneOffHook      = false;
+            _sdkSipCallerName     = string.Empty;
+            _sdkSipCallerNumber   = string.Empty;
             _recordConsentPromptIsVisible = false;
             RecordConsentPromptIsVisible.FireUpdate();
             lock (_participantLock)
@@ -1097,8 +1100,16 @@ namespace PepperDash.Essentials.Plugins
 
         private void OnControllerSipCallStatusChanged(object sender, SIPCall e)
         {
-            _activeSipCallId = e?.CallID ?? string.Empty;
-            this.LogDebug("SipCallStatusChanged: CallID={CallId}", _activeSipCallId);
+            if (e == null) return;
+            _activeSipCallId    = e.CallID;
+            _sdkPhoneOffHook    = !System.Array.Exists(_sipTerminalStatuses, s => s == e.Status);
+            _sdkSipCallerName   = e.PeerDisplayName ?? string.Empty;
+            _sdkSipCallerNumber = e.PeerNumber      ?? string.Empty;
+            this.LogDebug("SipCallStatusChanged: CallID={CallId} Status={Status} OffHook={OffHook} Caller={Caller}",
+                _activeSipCallId, e.Status, _sdkPhoneOffHook, _sdkSipCallerName);
+            PhoneOffHookFeedback.FireUpdate();
+            CallerIdNameFeedback.FireUpdate();
+            CallerIdNumberFeedback.FireUpdate();
         }
 
         private static System.Collections.Generic.List<Participant> MapParticipants(ParticipantInfo[] participants)
@@ -2675,19 +2686,28 @@ namespace PepperDash.Essentials.Plugins
 
 		#region Implementation of IHasPhoneDialing
 
+		// SDK-backed SIP call state — fed by OnControllerSipCallStatusChanged.
+		// Status codes where the call is active/ringing (not yet terminated):
+		// Incoming(2), Ringing(3), Accepted(9), Hold(10), InCall(11),
+		// RemoteHold(13), BothHold(14), SessionInProgress(15), StayOnPhone(16).
+		private static readonly int[] _sipTerminalStatuses = { 0, 1, 4, 5, 6, 7, 8, 12 };
+		private bool   _sdkPhoneOffHook;
+		private string _sdkSipCallerName   = string.Empty;
+		private string _sdkSipCallerNumber = string.Empty;
+
 		private Func<bool> PhoneOffHookFeedbackFunc
 		{
-			get { return () => Status.PhoneCall.OffHook; }
+			get { return () => _sdkPhoneOffHook; }
 		}
 
 		private Func<string> CallerIdNameFeedbackFunc
 		{
-			get { return () => Status.PhoneCall.PeerDisplayName; }
+			get { return () => _sdkSipCallerName; }
 		}
 
 		private Func<string> CallerIdNumberFeedbackFunc
 		{
-			get { return () => Status.PhoneCall.PeerNumber; }
+			get { return () => _sdkSipCallerNumber; }
 		}
 
 		public BoolFeedback PhoneOffHookFeedback { get; private set; }
