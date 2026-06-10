@@ -1,13 +1,13 @@
-﻿using System;
+using System;
 using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Newtonsoft.Json;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Devices.Common.Cameras;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins
 {
-    public class ZoomRoomCamera : CameraBase, IHasCameraPtzControl, IBridgeAdvanced
+    public class ZoomRoomCamera : CameraBase, IHasCameraPtzControl, IHasCameraControls, IBridgeAdvanced
     {
         protected ZoomRoom ParentCodec { get; private set; }
 
@@ -53,7 +53,18 @@ namespace PDT.Plugins.Zoom.Room
         void SendCommand(eZoomRoomCameraState state, eZoomRoomCameraAction action)
         {
             LastAction = action;
-            ParentCodec.SendText(string.Format("zCommand Call CameraControl Id: {0} State: {1} Action: {2}", Id, state, action));
+
+            // Far-end (participant) cameras carry the participant userID in Id and are controlled
+            // via the SDK's ControlUserCamera. Near-end cameras use ControlCamera with an empty
+            // device ID, which the SDK treats as the room's main camera.
+            if (this is IAmFarEndCamera && Id.HasValue && Id.Value != 0)
+            {
+                ParentCodec.ControlFarEndCamera(Id.Value, state, action);
+                return;
+            }
+
+            // Key is this camera's SDK device ID; an empty/unknown key falls back to the main camera.
+            ParentCodec.ControlNearEndCamera(Key, state, action);
         }
 
         void StartContinueTimer()

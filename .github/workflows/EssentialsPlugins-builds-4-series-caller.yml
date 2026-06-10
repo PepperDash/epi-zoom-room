@@ -1,0 +1,33 @@
+name: Build Essentials Plugin
+
+on:
+  push:
+    branches:
+      - '**'
+
+# The org's default GITHUB_TOKEN permissions don't include packages:read, so the build's restore
+# 401s on the org GitHub Packages feed (PepperDash.ZoomRoom.Sdk + PepperDashEssentials v3 dev).
+# Grant the reusable build the scopes it needs: packages (read deps + publish the plugin) and
+# contents (create/delete releases & tags).
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  getVersion:
+    uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-getversion.yml@main
+    secrets: inherit
+  build-4Series:
+    # Temporarily pinned to the branch that authenticates the org GitHub Packages feed so this
+    # plugin's INTERNAL dependency (PepperDash.ZoomRoom.Sdk) restores in CI. Revert to @main once
+    # PepperDash/workflow-templates#<pr> merges.
+    uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-4Series-builds.yml@feature/authenticate-github-packages-feed
+    secrets: inherit
+    needs: getVersion
+    if: needs.getVersion.outputs.newVersion == 'true'
+    with:
+      newVersion: ${{ needs.getVersion.outputs.newVersion }}
+      version: ${{ needs.getVersion.outputs.version }}
+      tag: ${{ needs.getVersion.outputs.tag }}
+      channel: ${{ needs.getVersion.outputs.channel }}
+      # bypassPackageCheck: true

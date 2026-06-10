@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges.JoinMaps;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins
 {
 	public class ZoomRoomJoinMap : VideoCodecControllerJoinMap
 	{
@@ -59,7 +59,7 @@ namespace PDT.Plugins.Zoom.Room
             },
             new JoinMetadata
             {
-                Description = "FB Indicates the password entered is incorrect",
+                Description = "FB Indicates the password login failed",
                 JoinCapabilities = eJoinCapabilities.ToSIMPL,
                 JoinType = eJoinType.Digital
             });
@@ -134,11 +134,28 @@ namespace PDT.Plugins.Zoom.Room
                 JoinType = eJoinType.Digital
             });
 
+        // Input side of join 100 (the base VideoCodecControllerJoinMap defines the ToSIMPL
+        // "directory search busy" feedback on the same join; input and output are independent).
+        // Manual phonebook fetch — the only way to load contacts when DisablePhonebookAutoDownload is set.
+        [JoinName("PhonebookGet")]
+        public JoinDataComplete PhonebookGet = new JoinDataComplete(
+            new JoinData
+            {
+                JoinNumber = 100,
+                JoinSpan = 1
+            },
+            new JoinMetadata
+            {
+                Description = "Pulse to (re)download the phonebook/contacts",
+                JoinCapabilities = eJoinCapabilities.FromSIMPL,
+                JoinType = eJoinType.Digital
+            });
+
 		[JoinName("CanSwapContentWithThumbnail")]
 		public JoinDataComplete CanSwapContentWithThumbnail = new JoinDataComplete(
 			new JoinData
 			{
-				JoinNumber = 206,
+				JoinNumber = 205,
 				JoinSpan = 1
 			},
 			new JoinMetadata
@@ -199,7 +216,7 @@ namespace PDT.Plugins.Zoom.Room
 			},
 			new JoinMetadata
 			{
-				Description = "Indicates if layout is on first page",
+				Description = "Indicates if layout is on last page",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.Digital
 			});
@@ -241,7 +258,7 @@ namespace PDT.Plugins.Zoom.Room
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'Gallery' is available",
+				Description = "Digital: FB layout 'Gallery' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -255,7 +272,7 @@ namespace PDT.Plugins.Zoom.Room
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'Speaker' is available",
+				Description = "Digital: FB layout 'Speaker' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -269,7 +286,7 @@ namespace PDT.Plugins.Zoom.Room
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'Strip' is available",
+				Description = "Digital: FB layout 'Strip' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -283,25 +300,10 @@ namespace PDT.Plugins.Zoom.Room
 			},
 			new JoinMetadata
 			{
-				Description = "FB Indicates if layout 'ShareAll' is available",
+				Description = "Digital: FB layout 'ShareAll' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});		
-
-		// TODO: #714 [ ] JoinMap >> SelfivewPipSizeToggle
-		[JoinName("SelfviewPipSizeToggle")]
-		public JoinDataComplete SelfviewPipSizeToggle = new JoinDataComplete(
-			new JoinData
-			{
-				JoinNumber = 231,
-				JoinSpan = 1
-			},
-			new JoinMetadata
-			{
-				Description = "Toggles the selfview pip size, (aka layout size)",
-				JoinCapabilities = eJoinCapabilities.ToFromSIMPL,
-				JoinType = eJoinType.Digital
-			});
 
         [JoinName("StartRecording")]
         public JoinDataComplete StartRecording = new JoinDataComplete(
@@ -355,7 +357,7 @@ namespace PDT.Plugins.Zoom.Room
             new JoinMetadata
             {
                 Description = "Pulse to agree to consent for meeting recording",
-                JoinCapabilities = eJoinCapabilities.ToSIMPL,
+                JoinCapabilities = eJoinCapabilities.FromSIMPL,
                 JoinType = eJoinType.Digital
             });
 
@@ -369,7 +371,7 @@ namespace PDT.Plugins.Zoom.Room
             new JoinMetadata
             {
                 Description = "Pulse to disagree to consent for meeting recording",
-                JoinCapabilities = eJoinCapabilities.ToSIMPL,
+                JoinCapabilities = eJoinCapabilities.FromSIMPL,
                 JoinType = eJoinType.Digital
             });
 

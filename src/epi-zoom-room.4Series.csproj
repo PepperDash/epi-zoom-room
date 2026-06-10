@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ProjectType>ProgramLibrary</ProjectType>
+    <TargetFramework>net8</TargetFramework>
+    <RootNamespace>PepperDash.Essentials.Plugins</RootNamespace>
+    <AssemblyName>PepperDash.Essentials.Plugins.Zoom.Room</AssemblyName>
+    <Configurations>Debug;Release</Configurations>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- CS0162: Unreachable code detected — emitted by the Crestron SDK's generated CPLZ-packaging temp file; not from plugin source. -->
+    <NoWarn>$(NoWarn);CS0162</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Crestron.SimplSharp.SDK.ProgramLibrary" Version="2.21.128" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="PepperDash.ZoomRoom.Sdk" Version="1.1.0-feature-configurable-wrapper-path.24" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PepperDashEssentials" Version="3.0.0-dev-v3-routing.13">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--
+    Embed the native ZRC SDK wrapper into the plugin assembly. Essentials' plugin loader
+    extracts the .cplz to a temp dir, moves only *.dll into loadedAssemblies, then deletes
+    the temp dir AND the .cplz. A loose .so in the package therefore never survives to runtime.
+    Embedding it in the DLL lets ZrcSdkController stage it to /usr/lib at startup.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(PkgPepperDash_ZoomRoom_Sdk)\runtimes\linux-arm\native\libzrcsdkwrapperpdt.so">
+      <LogicalName>libzrcsdkwrapperpdt.so</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>
