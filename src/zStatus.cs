@@ -198,7 +198,7 @@ namespace PepperDash.Essentials.Plugins
                 }
                 catch (Exception e)
                 {
-                    Debug.LogMessage(LogEventLevel.Information, "Error converting Zoom Phonebook results to generic: {Exception}", e);
+                    Debug.LogMessage(LogEventLevel.Error, "Error converting Zoom Phonebook results to generic: {Exception}", e);
                 }
 
                 return directory;

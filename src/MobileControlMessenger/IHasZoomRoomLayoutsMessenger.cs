@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.AppServer;
 using PepperDash.Essentials.Plugins;
 using ZoomRoomDevice = PepperDash.Essentials.Plugins.ZoomRoom;
@@ -32,9 +33,13 @@ namespace PepperDash.Essentials.AppServer.Messengers
             AddAction("/selectLayout", (id, content) =>
             {
                 var s = content?.ToObject<MobileControlSimpleContent<string>>();
-                if (s != null)
-                    _codec.SetLayout((zConfiguration.eLayoutStyle)Enum.Parse(
-                        typeof(zConfiguration.eLayoutStyle), s.Value, true));
+                if (string.IsNullOrEmpty(s?.Value))
+                    return;
+
+                if (Enum.TryParse<zConfiguration.eLayoutStyle>(s.Value, true, out var style))
+                    _codec.SetLayout(style);
+                else
+                    this.LogWarning("/selectLayout: unrecognized layout '{Layout}' — ignoring", s.Value);
             });
             AddAction("/participantsNextPage", (id, content) => _codec.LayoutTurnNextPage());
             AddAction("/participantsPreviousPage", (id, content) => _codec.LayoutTurnPreviousPage());

@@ -95,20 +95,23 @@ namespace PepperDash.Essentials.AppServer.Messengers
         {
             if (!_codec.IsReady) return;
 
-            try
+            Task.Run(() =>
             {
-                var status = new ZoomRoomStateMessage
+                try
                 {
-                    CameraIsMuted = _codec.CameraIsMutedFeedback.BoolValue,
-                    CurrentDirectory = _codec.DirectoryRoot
-                };
+                    var status = new ZoomRoomStateMessage
+                    {
+                        CameraIsMuted = _codec.CameraIsMutedFeedback.BoolValue,
+                        CurrentDirectory = _codec.DirectoryRoot
+                    };
 
-                Task.Run(() => PostStatusMessage(status, clientId));
-            }
-            catch (Exception ex)
-            {
-                this.LogError(ex, "Error sending ZoomRoom full status");
-            }
+                    PostStatusMessage(status, clientId);
+                }
+                catch (Exception ex)
+                {
+                    this.LogError(ex, "Error sending ZoomRoom full status");
+                }
+            });
         }
     }
 

@@ -258,7 +258,7 @@ namespace PepperDash.Essentials.Plugins
             }
             catch (Exception ex)
             {
-                this.LogError("Exception in SDK event handler: {Message}", ex.Message);
+                this.LogError(ex, "Exception in SDK event handler: {Message}", ex.Message);
             }
         }
 
