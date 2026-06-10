@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Crestron.SimplSharp;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
@@ -76,6 +77,18 @@ namespace PepperDash.Essentials.Plugins
         /// </summary>
         private void StageNativeWrapper()
         {
+            // The embedded wrapper is linux-arm only. Fail fast on other architectures
+            // (e.g. x64 dev/CI machines) with a clear message rather than a cryptic dlopen error (#28).
+            if (RuntimeInformation.OSArchitecture != Architecture.Arm &&
+                RuntimeInformation.OSArchitecture != Architecture.Arm64)
+            {
+                this.LogWarning(
+                    "Skipping native wrapper staging: architecture {Arch} is not ARM. " +
+                    "The embedded '{File}' is linux-arm only and will not load on this host.",
+                    RuntimeInformation.OSArchitecture, NativeWrapperFileName);
+                return;
+            }
+
             try
             {
                 var assembly = Assembly.GetExecutingAssembly();
@@ -145,15 +158,32 @@ namespace PepperDash.Essentials.Plugins
 
         private void LogMaxSymbolVersion(string path, string prefix)
         {
-            var text = System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(path));
+            // Stream-scan in fixed-size chunks instead of reading the full (MB-scale) binary into
+            // memory. libstdc++ / libc are typically 1-4 MB on ARM; loading them at every boot
+            // consumed significant heap for a diagnostic-only operation (#29).
+            const int BufSize = 4096;
+            var pattern = System.Text.Encoding.Latin1.GetBytes(prefix);
+            var buf = new byte[BufSize + 32]; // 32-byte overlap to catch symbols that span chunk boundaries
             Version max = null; string maxStr = null;
-            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
-                         text, System.Text.RegularExpressions.Regex.Escape(prefix) + @"([0-9]+(?:\.[0-9]+)+)"))
+            using var fs = File.OpenRead(path);
+            int overlap = 0;
+            while (true)
             {
-                if (Version.TryParse(m.Groups[1].Value, out var v) && (max == null || v > max))
+                var read = fs.Read(buf, overlap, BufSize);
+                if (read == 0) break;
+                var len = overlap + read;
+                var text = System.Text.Encoding.Latin1.GetString(buf, 0, len);
+                foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                    text, System.Text.RegularExpressions.Regex.Escape(prefix) + @"([0-9]+(?:\.[0-9]+)+)"))
                 {
-                    max = v; maxStr = m.Value;
+                    if (Version.TryParse(m.Groups[1].Value, out var v) && (max == null || v > max))
+                    {
+                        max = v; maxStr = m.Value;
+                    }
                 }
+                // Preserve last 32 bytes as overlap for the next chunk
+                overlap = Math.Min(32, len);
+                Buffer.BlockCopy(buf, len - overlap, buf, 0, overlap);
             }
             this.LogInformation("Runtime check: {Path} provides up to {Max}", path, maxStr ?? "(none found)");
         }

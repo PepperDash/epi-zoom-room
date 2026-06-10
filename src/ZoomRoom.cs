@@ -49,7 +49,8 @@ namespace PepperDash.Essentials.Plugins
         private bool _sdkMeetingLocked;
         private bool _sdkIsHost;
         private int  _sdkSharingState; // 0 = not sharing
-        // The ZRC SDK does not expose per-participant pin state, so we track what THIS room pinned
+        // Typed reference to avoid downcasting CommunicationMonitor at every call site (#26)
+        private SdkConnectionMonitor _sdkMonitor;
         // (best-effort) to drive ToggleParticipantPinState. Keyed by userId -> screenIndex.
         private readonly Dictionary<int, int> _pinnedUserScreens = new Dictionary<int, int>();
         // Ringing incoming meeting-invite, surfaced as an ActiveCall so the standard Accept/Reject
@@ -106,7 +107,8 @@ namespace PepperDash.Essentials.Plugins
 			Status        = new ZoomRoomStatus();
 			Configuration = new ZoomRoomConfiguration();
 
-			CommunicationMonitor = new SdkConnectionMonitor(this);
+			_sdkMonitor = new SdkConnectionMonitor(this);
+			CommunicationMonitor = _sdkMonitor;
 			DeviceManager.AddDevice(CommunicationMonitor);
 
 			CodecInfo = new ZoomRoomInfo(Status, Configuration);
@@ -667,7 +669,7 @@ Cameras = new List<IHasCameraControls>();
             this.LogInformation("SDK connection state changed: {State} ({Code})", state, e.ErrorCode);
 
             _isConnected = online;
-            ((SdkConnectionMonitor)CommunicationMonitor).SetOnline(online);
+            _sdkMonitor.SetOnline(online);
 
             // Fetch initial data only once fully Connected. At Established the SDK service helpers
             // (contacts, meeting list, settings) aren't ready yet, so these calls return failure;
