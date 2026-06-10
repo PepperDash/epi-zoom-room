@@ -66,7 +66,7 @@ namespace PepperDash.Essentials.AppServer.Messengers
         private ParticipantsStateMessage BuildStatus() =>
             new ParticipantsStateMessage
             {
-                Participants = _codec.Participants.CurrentParticipants,
+                Participants = _codec.GetParticipantsSnapshot(),
                 WaitingRoom = _codec.WaitingRoomParticipants
             };
     }

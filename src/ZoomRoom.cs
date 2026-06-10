@@ -884,7 +884,7 @@ namespace PepperDash.Essentials.Plugins
             _sdkIsRecording       = false;
             _recordConsentPromptIsVisible = false;
             RecordConsentPromptIsVisible.FireUpdate();
-            _pinnedUserScreens.Clear();
+            lock (_participantLock) _pinnedUserScreens.Clear();
             _pendingInviteCall    = null;
             ActiveCalls.Clear();
             Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
@@ -2182,6 +2182,16 @@ namespace PepperDash.Essentials.Plugins
         }
 
         /// <summary>
+        /// Returns a snapshot of the current participant list taken under <c>_participantLock</c>
+        /// so serialization threads don't race with SDK mutation callbacks.
+        /// </summary>
+        public List<Participant> GetParticipantsSnapshot()
+        {
+            lock (_participantLock)
+                return new System.Collections.Generic.List<Participant>(Participants.CurrentParticipants);
+        }
+
+        /// <summary>
         /// Participants currently in the waiting room (derived from the "silent mode" flag). Mapped to the
         /// standard <see cref="Participant"/> shape so the mobile UI can render them like the main roster.
         /// </summary>
@@ -2420,15 +2430,16 @@ namespace PepperDash.Essentials.Plugins
 			// Track on success so ToggleParticipantPinState can later unpin (the SDK exposes no
 			// per-participant pin state of its own).
 			if (_controller.PinUserOnScreen(userId, screenIndex))
-				_pinnedUserScreens[userId] = screenIndex;
-		}
+                lock (_participantLock) _pinnedUserScreens[userId] = screenIndex;
+        }
 
-		public void UnPinParticipant(int userId)
-		{
-			var screen = _pinnedUserScreens.TryGetValue(userId, out var s) ? s : 0;
-			if (_controller.UnpinUserFromScreen(userId, screen))
-				_pinnedUserScreens.Remove(userId);
-		}
+        public void UnPinParticipant(int userId)
+        {
+            int screen;
+            lock (_participantLock) screen = _pinnedUserScreens.TryGetValue(userId, out var s) ? s : 0;
+            if (_controller.UnpinUserFromScreen(userId, screen))
+                lock (_participantLock) _pinnedUserScreens.Remove(userId);
+        }
 
 		public void ToggleParticipantPinState(int userId, int screenIndex)
 		{
@@ -2436,7 +2447,8 @@ namespace PepperDash.Essentials.Plugins
 			// SDK gives no pin-state feedback, so toggle off our own tracked set rather than the
 			// always-false IsPinnedFb (which made the toggle always re-pin and fail on an
 			// already-pinned user).
-			var pinned = _pinnedUserScreens.ContainsKey(userId);
+			bool pinned;
+			lock (_participantLock) pinned = _pinnedUserScreens.ContainsKey(userId);
 			this.LogDebug("ToggleParticipantPinState: userId={UserId} pinned(tracked)={Pinned} -> {Action}",
 				userId, pinned, pinned ? "Unpin" : "Pin");
 			if (pinned)
