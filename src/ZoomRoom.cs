@@ -201,6 +201,11 @@ namespace PepperDash.Essentials.Plugins
 		//CTimer LoginMessageReceivedTimer;
 		//CTimer RetryConnectionTimer;
 
+		// Periodic booking refresh — polls ListMeeting() on a fixed interval while connected.
+		// The ZRC SDK has no "calendar changed" push event; polling is the only mechanism.
+		private CTimer _bookingRefreshTimer;
+		private const int BookingRefreshIntervalMs = 5 * 60 * 1000; // 5 minutes
+
 		/// <summary>
 		/// Gets and returns the scaled volume of the codec
 		/// </summary>
@@ -738,6 +743,7 @@ namespace PepperDash.Essentials.Plugins
                 // MeetingListChanged and populate CodecSchedule.
                 this.LogInformation("Requesting meeting schedule (bookings)");
                 _controller.ListMeeting();
+                StartBookingRefreshTimer();
 
                 // Signal readiness: wires EISC camera joins (VideoCodecBase.LinkVideoCodecToApi)
                 // and unblocks MC /fullStatus (ZoomRoomMessenger.SendFullStatus gates on IsReady).
@@ -745,6 +751,7 @@ namespace PepperDash.Essentials.Plugins
             }
             else if (!online)
             {
+                StopBookingRefreshTimer();
                 ResetMeetingState();
                 lock (_directoryLock) _directoryContactsById.Clear();
                 PhonebookSyncState.CodecDisconnected();
@@ -1841,6 +1848,25 @@ namespace PepperDash.Essentials.Plugins
 		{
 			_phonebookNextStart = 0;
 			_controller.SubscribeContacts(0, PhonebookPageSize, false);
+		}
+
+		private void StartBookingRefreshTimer()
+		{
+			_bookingRefreshTimer?.Dispose();
+			_bookingRefreshTimer = new CTimer(_ =>
+			{
+				if (_isConnected)
+				{
+					this.LogDebug("Booking refresh: polling ListMeeting()");
+					_controller.ListMeeting();
+				}
+			}, null, BookingRefreshIntervalMs, BookingRefreshIntervalMs);
+		}
+
+		private void StopBookingRefreshTimer()
+		{
+			_bookingRefreshTimer?.Dispose();
+			_bookingRefreshTimer = null;
 		}
 
 		private void OnControllerContactListChanged(object sender, ContactListEventArgs e)
