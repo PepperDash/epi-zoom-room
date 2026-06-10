@@ -2088,6 +2088,15 @@ Cameras = new List<IHasCameraControls>();
 					.ToList();
 				var controllableIds = new HashSet<int>(controllable.Select(info => info.UserID));
 
+				// Early-exit if the set of controllable participant IDs is unchanged — the common
+				// case during roster churn that doesn't involve camera-capable participants (#32).
+				var existingIds = new HashSet<int>(
+					Cameras.OfType<ZoomRoomFarEndCamera>()
+					        .Where(c => c.Id.HasValue)
+					        .Select(c => c.Id.Value));
+				if (controllableIds.SetEquals(existingIds))
+					return;
+
 				// Add a camera for each newly-controllable participant.
 				foreach (var info in controllable)
 				{
