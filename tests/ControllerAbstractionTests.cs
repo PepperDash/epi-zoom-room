@@ -206,7 +206,7 @@ public class ControllerAbstractionTests
     [Theory]
     [InlineData("SubscribeContacts")]
     [InlineData("InviteAttendees")]
-    [InlineData("MeetWithImUsers")]
+    [InlineData("MeetWithIMUsers")]
     public void IZoomRoomController_Has_Contacts_Method(string methodName)
     {
         ControllerInterfaceType

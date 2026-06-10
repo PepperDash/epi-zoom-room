@@ -406,7 +406,7 @@ namespace PepperDash.Essentials.Plugins
 
         public bool SubscribeContacts(int startIndex, int count, bool searchSip) => Rc(nameof(SubscribeContacts), _sdk.SubscribeContacts(startIndex, count, searchSip));
         public bool InviteAttendees(string[] contactIds)                          => Rc(nameof(InviteAttendees), _sdk.InviteAttendees(contactIds));
-        public bool MeetWithImUsers(string[] contactIds)                          => Rc(nameof(MeetWithImUsers), _sdk.MeetWithImUsers(contactIds));
+        public bool MeetWithIMUsers(string[] contactIds)                          => Rc(nameof(MeetWithIMUsers), _sdk.MeetWithIMUsers(contactIds));
 
         // ── Bookings / Schedule ────────────────────────────────────────────────
 

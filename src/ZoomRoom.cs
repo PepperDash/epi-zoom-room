@@ -1637,7 +1637,7 @@ namespace PepperDash.Essentials.Plugins
 			else
 			{
 				this.LogInformation("Starting new meeting with contact {ContactId}", ic.ContactId);
-				_controller.MeetWithImUsers(contactIds);
+				_controller.MeetWithIMUsers(contactIds);
 			}
 		}
 
@@ -1657,7 +1657,7 @@ namespace PepperDash.Essentials.Plugins
             }
 
             this.LogInformation("Starting new meeting with {Count} contact(s)", contactIds.Length);
-            _controller.MeetWithImUsers(contactIds);
+            _controller.MeetWithIMUsers(contactIds);
         }
 
         /// <summary>
@@ -1718,7 +1718,7 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>
         /// Console/test helper: invites a directory contact by its <paramref name="contactId"/>. If this
         /// room is in a meeting the contact is invited to it (<c>InviteAttendees</c>); otherwise a new
-        /// meeting is started with them (<c>MeetWithImUsers</c>) — same routing as
+        /// meeting is started with them (<c>MeetWithIMUsers</c>) — same routing as
         /// <see cref="Dial(IInvitableContact)"/>, but callable from the console with a plain string.
         /// Get IDs from <see cref="LogDirectory"/>.
         /// </summary>
@@ -1745,7 +1745,7 @@ namespace PepperDash.Essentials.Plugins
             else
             {
                 this.LogInformation("Starting a new meeting with contact {ContactId}", contactId);
-                _controller.MeetWithImUsers(ids);
+                _controller.MeetWithIMUsers(ids);
             }
         }
 

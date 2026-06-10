@@ -192,7 +192,7 @@ namespace PepperDash.Essentials.Plugins
         bool InviteAttendees(string[] contactIds);
 
         /// <summary>Starts a NEW meeting with the given contacts (by contact ID).</summary>
-        bool MeetWithImUsers(string[] contactIds);
+        bool MeetWithIMUsers(string[] contactIds);
 
         // ── Bookings / Schedule ────────────────────────────────────────────────
 
