@@ -1093,6 +1093,7 @@ namespace PepperDash.Essentials.Plugins
             _sdkSharingState = e.SharingState;
             SharingContentIsOnFeedback.FireUpdate();
             ReceivingContent.FireUpdate();
+            CanSwapContentWithThumbnailFeedback.FireUpdate();
         }
 
         private void OnControllerAirPlayStatusChanged(object sender, AirPlayStatusEventArgs e)
@@ -2473,7 +2474,9 @@ namespace PepperDash.Essentials.Plugins
 
 		private Func<int> NumberOfScreensFeedbackFunc
 		{
-			get { return () => Status.NumberOfScreens.NumOfScreens; }
+			// Status.NumberOfScreens is never populated (JSON pipeline removed).
+			// Crestron 4-series Zoom Rooms manage a single display output — return 1.
+			get { return () => 1; }
 		}
 
 		public IntFeedback NumberOfScreensFeedback { get; private set; }
@@ -2800,7 +2803,10 @@ namespace PepperDash.Essentials.Plugins
 
 		private Func<bool> CanSwapContentWithThumbnailFeedbackFunc
 		{
-			get { return () => Status.Layout.can_Switch_Floating_Share_Content; }
+			// Status.Layout.can_Switch_Floating_Share_Content is never populated (JSON pipeline removed).
+			// SwitchToFloatingShareForSingleScreen is only meaningful when content is being shared;
+			// use the SDK sharing state as the availability proxy.
+			get { return () => _sdkSharingState != 0; }
 		}
 
 		private Func<bool> ContentSwappedWithThumbnailFeedbackFunc
@@ -2867,6 +2873,7 @@ namespace PepperDash.Essentials.Plugins
 		public void SetLayout(zConfiguration.eLayoutStyle layoutStyle)
 		{
 			LastSelectedLayout = layoutStyle;
+			LocalLayoutFeedback.FireUpdate();
 
 			// Map Essentials layout style -> ZRC SDK VideoLayoutStyle int.
 			// This must NOT be a direct (int) cast: eLayoutStyle is a [Flags] enum
@@ -2914,16 +2921,12 @@ namespace PepperDash.Essentials.Plugins
 
 		private Func<string> LocalLayoutFeedbackFunc
 		{
-			get
-			{
-				return () =>
-				{
-					if (Configuration.Call.Layout.Style != zConfiguration.eLayoutStyle.None)
-						return Configuration.Call.Layout.Style.ToString();
-					else
-						return Configuration.Client.Call.Layout.Style.ToString();
-				};
-			}
+			// Configuration.Call.Layout.Style is never populated (JSON pipeline removed).
+			// Track the last layout explicitly set via SetLayout(); default None means
+			// the next LocalLayoutToggle() starts from the beginning of the cycle.
+			get { return () => LastSelectedLayout == zConfiguration.eLayoutStyle.None
+			                       ? string.Empty
+			                       : LastSelectedLayout.ToString(); }
 		}
 
 		public StringFeedback LocalLayoutFeedback { get; private set; }
