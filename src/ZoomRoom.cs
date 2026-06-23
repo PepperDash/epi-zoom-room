@@ -30,7 +30,7 @@ namespace PepperDash.Essentials.Plugins
 		IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
 		IHasFarEndContentStatus, IHasSelfviewPosition, IHasPhoneDialing, IHasZoomRoomLayouts, IHasParticipantPinUnpin,
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
-        IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets
+        IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback
 	{
 #pragma warning disable CS0067 // Required by IHasCameraMuteWithUnmuteReqeust; never raised because Zoom Room SDK handles video state directly
         public event EventHandler VideoUnmuteRequested;
@@ -498,6 +498,32 @@ Cameras = new List<IHasCameraControls>();
 		public void ExecuteSwitch(object inputSelector, object outputSelector, eRoutingSignalType signalType)
 		{
 			ExecuteSwitch(inputSelector);
+		}
+
+		#endregion
+
+		#region IRoutingSinkWithFeedback Members
+
+		public RoutingInputPort CurrentInputPort { get; private set; }
+
+		public event InputChangedEventHandler InputChanged;
+
+		#endregion
+
+		#region ICurrentSources Members
+
+		public Dictionary<eRoutingSignalType, IRoutingSource> CurrentSources { get; private set; } = new Dictionary<eRoutingSignalType, IRoutingSource>();
+
+		public Dictionary<eRoutingSignalType, string> CurrentSourceKeys { get; private set; } = new Dictionary<eRoutingSignalType, string>();
+
+		public event EventHandler<CurrentSourcesChangedEventArgs> CurrentSourcesChanged;
+
+		public void SetCurrentSource(eRoutingSignalType signalType, IRoutingSource sourceDevice)
+		{
+			CurrentSources.TryGetValue(signalType, out var previousSource);
+			CurrentSources[signalType] = sourceDevice;
+			CurrentSourceKeys[signalType] = sourceDevice?.Key;
+			CurrentSourcesChanged?.Invoke(this, new CurrentSourcesChangedEventArgs(signalType, previousSource, sourceDevice));
 		}
 
 		#endregion
