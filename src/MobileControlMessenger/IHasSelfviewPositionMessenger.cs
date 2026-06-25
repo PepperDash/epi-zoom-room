@@ -88,12 +88,12 @@ namespace PepperDash.Essentials.AppServer.Messengers
         protected override DeviceStateMessageBase BuildFullStatus() =>
             new SelfviewPositionStateMessage
             {
-                SelfviewPipPosition = _codec.SelfviewPipPositionFeedback.StringValue,
+                SelfviewPipPosition = _codec.SelfviewPipPositionFeedback.StringValue ?? "Unknown",
                 AvailablePositions  = GetOptions().Select(o => new SelfviewOption { Command = o.Command, Label = o.Label }).ToList()
             };
 
         protected override DeviceStateMessageBase BuildChangedStatus(string newValue) =>
-            new SelfviewPositionStateMessage { SelfviewPipPosition = newValue };
+            new SelfviewPositionStateMessage { SelfviewPipPosition = newValue ?? "Unknown" };
     }
 
     /// <summary>Status payload for <see cref="IHasSelfviewPositionMessenger"/>.</summary>

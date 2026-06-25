@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using PepperDash.Core.Logging;
 using PepperDash.Essentials.AppServer;
@@ -59,12 +62,35 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
         private ZoomRoomLayoutState BuildLayoutState() => new ZoomRoomLayoutState
         {
-            AvailableLayouts = _codec.AvailableLayouts,
+            AvailableLayouts = GetAvailableLayoutOptions(),
             LayoutViewIsOnFirstPage = _codec.LayoutViewIsOnFirstPageFeedback.BoolValue,
             LayoutViewIsOnLastPage = _codec.LayoutViewIsOnLastPageFeedback.BoolValue,
             CanSwapContentWithThumbnail = _codec.CanSwapContentWithThumbnailFeedback.BoolValue,
             ContentSwappedWithThumbnail = _codec.ContentSwappedWithThumbnailFeedback.BoolValue
         };
+
+        private List<LayoutOption> GetAvailableLayoutOptions()
+        {
+            var layouts = _codec.AvailableLayouts;
+            var options = new List<LayoutOption>();
+
+            foreach (zConfiguration.eLayoutStyle style in Enum.GetValues(typeof(zConfiguration.eLayoutStyle)))
+            {
+                if (style == zConfiguration.eLayoutStyle.None)
+                    continue;
+
+                if (!layouts.HasFlag(style))
+                    continue;
+
+                options.Add(new LayoutOption
+                {
+                    Command = style.ToString(),
+                    Label = style.ToString()
+                });
+            }
+
+            return options;
+        }
     }
 
     /// <summary>
@@ -82,7 +108,7 @@ namespace PepperDash.Essentials.AppServer.Messengers
     public class ZoomRoomLayoutState
     {
         [JsonProperty("availableLayouts", NullValueHandling = NullValueHandling.Ignore)]
-        public zConfiguration.eLayoutStyle AvailableLayouts { get; set; }
+        public List<LayoutOption> AvailableLayouts { get; set; }
 
         [JsonProperty("layoutViewIsOnFirstPage", NullValueHandling = NullValueHandling.Ignore)]
         public bool LayoutViewIsOnFirstPage { get; set; }
@@ -95,5 +121,17 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
         [JsonProperty("contentSwappedWithThumbnail", NullValueHandling = NullValueHandling.Ignore)]
         public bool ContentSwappedWithThumbnail { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a single available layout option with a command and display label.
+    /// </summary>
+    public class LayoutOption
+    {
+        [JsonProperty("command")]
+        public string Command { get; set; }
+
+        [JsonProperty("label")]
+        public string Label { get; set; }
     }
 }

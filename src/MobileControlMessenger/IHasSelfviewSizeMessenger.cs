@@ -30,12 +30,12 @@ namespace PepperDash.Essentials.AppServer.Messengers
         protected override DeviceStateMessageBase BuildFullStatus() =>
             new SelfviewSizeStateMessage
             {
-                SelfviewPipSize  = _codec.SelfviewPipSizeFeedback.StringValue,
+                SelfviewPipSize  = _codec.SelfviewPipSizeFeedback.StringValue ?? "Unknown",
                 AvailableSizes   = GetOptions().Select(o => new SelfviewOption { Command = o.Command, Label = o.Label }).ToList()
             };
 
         protected override DeviceStateMessageBase BuildChangedStatus(string newValue) =>
-            new SelfviewSizeStateMessage { SelfviewPipSize = newValue };
+            new SelfviewSizeStateMessage { SelfviewPipSize = newValue ?? "Unknown" };
     }
 
     /// <summary>Status payload for <see cref="IHasSelfviewSizeMessenger"/>.</summary>
