@@ -119,6 +119,10 @@ namespace PepperDash.Essentials.Plugins
 				eRoutingSignalType.Audio | eRoutingSignalType.Video,
 				eRoutingPortConnectionType.Hdmi, new Action(StopSharing), this);
 
+			Input1 = new RoutingInputPort(RoutingPortNames.HdmiIn1,
+				eRoutingSignalType.Audio | eRoutingSignalType.Video,
+				eRoutingPortConnectionType.Hdmi, null, this);
+
 			Output1 = new RoutingOutputPort(RoutingPortNames.HdmiOut1,
 				eRoutingSignalType.Audio | eRoutingSignalType.Video,
 				eRoutingPortConnectionType.Hdmi, null, this);
@@ -292,6 +296,8 @@ Cameras = new List<IHasCameraControls>();
 		public RoutingOutputPort Output1 { get; private set; }
 		public RoutingOutputPort Output2 { get; private set; }
         public RoutingOutputPort Output3 { get; private set; }
+
+		public RoutingInputPort Input1 { get; private set; }
 
 		#region ICommunicationMonitor Members
 
@@ -547,6 +553,7 @@ Cameras = new List<IHasCameraControls>();
 			// Set up input ports
 			CreateOsdSource();
 			InputPorts.Add(CodecOsdIn);
+			InputPorts.Add(Input1);
 
 			// Set up output ports
 			OutputPorts.Add(Output1);
