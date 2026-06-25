@@ -30,81 +30,81 @@ namespace PepperDash.Essentials.Plugins
 		IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
 		IHasFarEndContentStatus, IHasSelfviewPosition, IHasPhoneDialing, IHasZoomRoomLayouts, IHasParticipantPinUnpin,
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
-        IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback
+		IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback
 	{
 #pragma warning disable CS0067 // Required by IHasCameraMuteWithUnmuteReqeust; never raised because Zoom Room SDK handles video state directly
-        public event EventHandler VideoUnmuteRequested;
+		public event EventHandler VideoUnmuteRequested;
 #pragma warning restore CS0067
 
 		private const long MeetingRefreshTimer = 60000;
-        public uint DefaultMeetingDurationMin { get; private set; }
+		public uint DefaultMeetingDurationMin { get; private set; }
 
-        // ── SDK-backed state (replaces the old zStatus/zConfiguration model) ──
-        private readonly IZoomRoomController _controller;
-        private bool _sdkAudioMuted;
-        private bool _sdkCameraOff;
-        private bool _cameraAutoModeOn; // tracks SmartCameraMask: SpeakerFocus(auto) vs Manual
-        private bool _sdkIsRecording;
-        private bool _sdkCanRecord; // room "can start recording" — from MeetingRecordingInfo.canIRecord
-        private bool _sdkMeetingLocked;
-        private bool _sdkIsHost;
-        private int  _sdkSharingState; // 0 = not sharing
-        // Typed reference to avoid downcasting CommunicationMonitor at every call site (#26)
-        private SdkConnectionMonitor _sdkMonitor;
-        // (best-effort) to drive ToggleParticipantPinState. Keyed by userId -> screenIndex.
-        private readonly Dictionary<int, int> _pinnedUserScreens = new Dictionary<int, int>();
-        // Ringing incoming meeting-invite, surfaced as an ActiveCall so the standard Accept/Reject
-        // path works. Answered via AnswerMeetingInvite (the native side cached the full invite).
-        private CodecActiveCallItem _pendingInviteCall;
-        private string _currentMeetingId     = string.Empty;
-        private string _currentMeetingNumber = string.Empty;
-        private string _currentMeetingName   = string.Empty;
-        private string _activeSipCallId      = string.Empty;
-        private bool _meetingPasswordRequired;
-        // Layout page state, driven by the SDK's VideoPageStatus notification.
-        private bool _layoutIsOnFirstPage;
-        private bool _layoutIsOnLastPage;
-        private int  _currentPageVideoType; // PageVideoType (0 = GalleryView)
-        private bool _contentSwappedWithThumbnail;
-        // Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
-        private ushort _sdkSpeakerVolumeLevel;
-        private bool _sdkSpeakerMuted;
+		// ── SDK-backed state (replaces the old zStatus/zConfiguration model) ──
+		private readonly IZoomRoomController _controller;
+		private bool _sdkAudioMuted;
+		private bool _sdkCameraOff;
+		private bool _cameraAutoModeOn; // tracks SmartCameraMask: SpeakerFocus(auto) vs Manual
+		private bool _sdkIsRecording;
+		private bool _sdkCanRecord; // room "can start recording" — from MeetingRecordingInfo.canIRecord
+		private bool _sdkMeetingLocked;
+		private bool _sdkIsHost;
+		private int _sdkSharingState; // 0 = not sharing
+									  // Typed reference to avoid downcasting CommunicationMonitor at every call site (#26)
+		private SdkConnectionMonitor _sdkMonitor;
+		// (best-effort) to drive ToggleParticipantPinState. Keyed by userId -> screenIndex.
+		private readonly Dictionary<int, int> _pinnedUserScreens = new Dictionary<int, int>();
+		// Ringing incoming meeting-invite, surfaced as an ActiveCall so the standard Accept/Reject
+		// path works. Answered via AnswerMeetingInvite (the native side cached the full invite).
+		private CodecActiveCallItem _pendingInviteCall;
+		private string _currentMeetingId = string.Empty;
+		private string _currentMeetingNumber = string.Empty;
+		private string _currentMeetingName = string.Empty;
+		private string _activeSipCallId = string.Empty;
+		private bool _meetingPasswordRequired;
+		// Layout page state, driven by the SDK's VideoPageStatus notification.
+		private bool _layoutIsOnFirstPage;
+		private bool _layoutIsOnLastPage;
+		private int _currentPageVideoType; // PageVideoType (0 = GalleryView)
+		private bool _contentSwappedWithThumbnail;
+		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
+		private ushort _sdkSpeakerVolumeLevel;
+		private bool _sdkSpeakerMuted;
 
-        // True once the SDK reports the room Connected/Established. Gates outbound command methods so
-        // join/start/invite actions issued before the room is paired/connected are dropped with a clear
-        // log entry instead of silently failing inside the SDK (the old ZoomRoomSyncState used to gate this).
-        private volatile bool _isConnected;
+		// True once the SDK reports the room Connected/Established. Gates outbound command methods so
+		// join/start/invite actions issued before the room is paired/connected are dropped with a clear
+		// log entry instead of silently failing inside the SDK (the old ZoomRoomSyncState used to gate this).
+		private volatile bool _isConnected;
 
-        private readonly object _participantLock = new object();
-        // Raw SDK participant info keyed by userID, kept in sync with Participants.CurrentParticipants.
-        // Carries the far-end camera-control flags the Essentials Participant type does not, so
-        // UpdateFarEndCameras() can discover which participants expose controllable cameras.
-        private readonly Dictionary<int, ParticipantInfo> _participantInfoByUserId = new Dictionary<int, ParticipantInfo>();
-        // Directory/phonebook contacts accumulated from the SDK contact subscription (R-D), keyed by
-        // contact ID. The subscription delivers contacts in pages; merging here lets DirectoryRoot be
-        // rebuilt from the union of all batches received.
-        private readonly object _directoryLock = new object();
-        private readonly Dictionary<string, ContactInfo> _directoryContactsById = new Dictionary<string, ContactInfo>();
-        // Pagination state for phonebook downloads. The ZRC SDK contact subscribe is range-based;
-        // each SubscribeContacts(start, count) only notifies for that window. We keep subscribing
-        // to successive windows until a batch comes back with fewer entries than the page size.
-        private const int PhonebookPageSize = 50;
-        private int _phonebookNextStart;
-        private IHasCameraControls _selectedCamera;
-        private CodecDirectory _currentDirectoryResult;
+		private readonly object _participantLock = new object();
+		// Raw SDK participant info keyed by userID, kept in sync with Participants.CurrentParticipants.
+		// Carries the far-end camera-control flags the Essentials Participant type does not, so
+		// UpdateFarEndCameras() can discover which participants expose controllable cameras.
+		private readonly Dictionary<int, ParticipantInfo> _participantInfoByUserId = new Dictionary<int, ParticipantInfo>();
+		// Directory/phonebook contacts accumulated from the SDK contact subscription (R-D), keyed by
+		// contact ID. The subscription delivers contacts in pages; merging here lets DirectoryRoot be
+		// rebuilt from the union of all batches received.
+		private readonly object _directoryLock = new object();
+		private readonly Dictionary<string, ContactInfo> _directoryContactsById = new Dictionary<string, ContactInfo>();
+		// Pagination state for phonebook downloads. The ZRC SDK contact subscribe is range-based;
+		// each SubscribeContacts(start, count) only notifies for that window. We keep subscribing
+		// to successive windows until a batch comes back with fewer entries than the page size.
+		private const int PhonebookPageSize = 50;
+		private int _phonebookNextStart;
+		private IHasCameraControls _selectedCamera;
+		private CodecDirectory _currentDirectoryResult;
 
-        private readonly ZoomRoomPropertiesConfig _props;
+		private readonly ZoomRoomPropertiesConfig _props;
 
-        public ZoomRoom(DeviceConfig config, IZoomRoomController controller, ZoomRoomPropertiesConfig props)
+		public ZoomRoom(DeviceConfig config, IZoomRoomController controller, ZoomRoomPropertiesConfig props)
 			: base(config)
 		{
-            DefaultMeetingDurationMin = 30;
+			DefaultMeetingDurationMin = 30;
 
 			_props = props;
 
-            _controller = controller;
+			_controller = controller;
 
-			Status        = new ZoomRoomStatus();
+			Status = new ZoomRoomStatus();
 			Configuration = new ZoomRoomConfiguration();
 
 			_sdkMonitor = new SdkConnectionMonitor(this);
@@ -131,9 +131,9 @@ namespace PepperDash.Essentials.Plugins
 				eRoutingSignalType.Video,
 				eRoutingPortConnectionType.DisplayPort, null, this);
 
-            Output3 = new RoutingOutputPort(RoutingPortNames.HdmiOut3,
-                eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                eRoutingPortConnectionType.Hdmi, null, this);
+			Output3 = new RoutingOutputPort(RoutingPortNames.HdmiOut3,
+				eRoutingSignalType.Audio | eRoutingSignalType.Video,
+				eRoutingPortConnectionType.Hdmi, null, this);
 
 			SelfviewIsOnFeedback = new BoolFeedback(SelfViewIsOnFeedbackFunc);
 
@@ -145,10 +145,10 @@ namespace PepperDash.Essentials.Plugins
 
 			CodecSchedule = new CodecScheduleAwareness(MeetingRefreshTimer);
 
-		    if (_props.MinutesBeforeMeetingStart > 0)
-		    {
-		        CodecSchedule.MeetingWarningMinutes = _props.MinutesBeforeMeetingStart;
-		    }
+			if (_props.MinutesBeforeMeetingStart > 0)
+			{
+				CodecSchedule.MeetingWarningMinutes = _props.MinutesBeforeMeetingStart;
+			}
 
 			ReceivingContent = new BoolFeedback(FarEndIsSharingContentFeedbackFunc);
 
@@ -157,7 +157,7 @@ namespace PepperDash.Essentials.Plugins
 			// TODO: #714 [ ] SelfviewPipSizeFeedback
 			SelfviewPipSizeFeedback = new StringFeedback(SelfviewPipSizeFeedbackFunc);
 
-Cameras = new List<IHasCameraControls>();
+			Cameras = new List<IHasCameraControls>();
 
 			// Initialized here (not in SetUpCameras, which only runs once connected) so the
 			// SelectedCamera setter never dereferences a null feedback.
@@ -184,13 +184,13 @@ Cameras = new List<IHasCameraControls>();
 
 			NumberOfScreensFeedback = new IntFeedback(NumberOfScreensFeedbackFunc);
 
-            MeetingIsLockedFeedback = new BoolFeedback(() => _sdkMeetingLocked);
+			MeetingIsLockedFeedback = new BoolFeedback(() => _sdkMeetingLocked);
 
-            MeetingIsRecordingFeedback = new BoolFeedback(() => _sdkIsRecording);
+			MeetingIsRecordingFeedback = new BoolFeedback(() => _sdkIsRecording);
 
-            RecordConsentPromptIsVisible = new BoolFeedback(() => _recordConsentPromptIsVisible);
+			RecordConsentPromptIsVisible = new BoolFeedback(() => _recordConsentPromptIsVisible);
 
-            SetUpRouting();
+			SetUpRouting();
 		}
 
 		public ZoomRoomStatus Status { get; private set; }
@@ -247,8 +247,11 @@ Cameras = new List<IHasCameraControls>();
 		protected Func<bool> SelfViewIsOnFeedbackFunc
 		{
 			// Self-view is "on" whenever the PiP size is not Off.
-			get { return () => _currentSelfviewPipSize != null
-				&& !"Off".Equals(_currentSelfviewPipSize.Command, StringComparison.OrdinalIgnoreCase); }
+			get
+			{
+				return () => _currentSelfviewPipSize != null
+				&& !"Off".Equals(_currentSelfviewPipSize.Command, StringComparison.OrdinalIgnoreCase);
+			}
 		}
 
 		protected Func<bool> CameraIsOffFeedbackFunc
@@ -295,7 +298,7 @@ Cameras = new List<IHasCameraControls>();
 		public RoutingInputPort CodecOsdIn { get; private set; }
 		public RoutingOutputPort Output1 { get; private set; }
 		public RoutingOutputPort Output2 { get; private set; }
-        public RoutingOutputPort Output3 { get; private set; }
+		public RoutingOutputPort Output3 { get; private set; }
 
 		public RoutingInputPort Input1 { get; private set; }
 
@@ -335,39 +338,39 @@ Cameras = new List<IHasCameraControls>();
 		public StringFeedback SelectedCameraFeedback { get; private set; }
 
 		public void SelectCamera(string key)
-        {
-            // Read the camera list under _participantLock — SetUpCameras and UpdateFarEndCameras
-            // mutate Cameras from the SDK connection/participant threads.
-            IHasCameraControls camera;
-            lock (_participantLock)
-                camera = Cameras.FirstOrDefault(c => c.Key.Equals(key));
+		{
+			// Read the camera list under _participantLock — SetUpCameras and UpdateFarEndCameras
+			// mutate Cameras from the SDK connection/participant threads.
+			IHasCameraControls camera;
+			lock (_participantLock)
+				camera = Cameras.FirstOrDefault(c => c.Key.Equals(key));
 
-            if (camera == null)
-            {
-                this.LogWarning("SelectCamera: no camera with key {CameraKey}", key);
-                return;
-            }
+			if (camera == null)
+			{
+				this.LogWarning("SelectCamera: no camera with key {CameraKey}", key);
+				return;
+			}
 
-            // Far-end cameras are selected locally only (no SDK device switch); near-end cameras
-            // switch the room's active camera via the setting service, keyed by device ID.
-            if (camera is IAmFarEndCamera)
-            {
-                SelectedCamera = camera;
-                return;
-            }
+			// Far-end cameras are selected locally only (no SDK device switch); near-end cameras
+			// switch the room's active camera via the setting service, keyed by device ID.
+			if (camera is IAmFarEndCamera)
+			{
+				SelectedCamera = camera;
+				return;
+			}
 
-            if (_controller.SetCurrentCamera(key))
-            {
-                SelectedCamera = camera;
-            }
-            else
-            {
-                // SDK rejected the switch (wrong meeting state, device unavailable). Leave SelectedCamera
-                // unchanged and re-assert the true current selection so the UI doesn't desync from intent.
-                this.LogWarning("SelectCamera: SDK rejected switch to {CameraKey}; selection unchanged.", key);
-                SelectedCameraFeedback.FireUpdate();
-            }
-        }
+			if (_controller.SetCurrentCamera(key))
+			{
+				SelectedCamera = camera;
+			}
+			else
+			{
+				// SDK rejected the switch (wrong meeting state, device unavailable). Leave SelectedCamera
+				// unchanged and re-assert the true current selection so the UI doesn't desync from intent.
+				this.LogWarning("SelectCamera: SDK rejected switch to {CameraKey}; selection unchanged.", key);
+				SelectedCameraFeedback.FireUpdate();
+			}
+		}
 
 		public CameraBase FarEndCamera { get; private set; }
 
@@ -451,7 +454,7 @@ Cameras = new List<IHasCameraControls>();
 
 		public void GetDirectoryFolderContents(string folderId)
 		{
-			var directoryResults = new CodecDirectory {ResultsFolderId = folderId};
+			var directoryResults = new CodecDirectory { ResultsFolderId = folderId };
 
 			directoryResults.AddContactsToDirectory(
 				DirectoryRoot.CurrentDirectoryResults.FindAll(c => c.ParentFolderId.Equals(folderId)));
@@ -538,7 +541,7 @@ Cameras = new List<IHasCameraControls>();
 
 		private void SetUpDirectory()
 		{
-			DirectoryRoot = new CodecDirectory() {ResultsFolderId = "root"};
+			DirectoryRoot = new CodecDirectory() { ResultsFolderId = "root" };
 
 			CurrentDirectoryResultIsNotDirectoryRoot = new BoolFeedback(() => CurrentDirectoryResult.ResultsFolderId != "root");
 
@@ -629,7 +632,6 @@ Cameras = new List<IHasCameraControls>();
 			// One messenger per capability interface (named after the interface, per the core convention).
 			controller.AddDeviceMessenger(new IHasParticipantsMessenger($"{Key}-participants-{controller.Key}", path, this));
 			controller.AddDeviceMessenger(new IHasParticipantPinUnpinMessenger($"{Key}-participantPin-{controller.Key}", path, this));
-			controller.AddDeviceMessenger(new IHasParticipantAudioMuteMessenger($"{Key}-participantAudioMute-{controller.Key}", path, this));
 			controller.AddDeviceMessenger(new IHasMeetingLockMessenger($"{Key}-meetingLock-{controller.Key}", path, this));
 			controller.AddDeviceMessenger(new IHasMeetingRecordingWithPromptMessenger($"{Key}-meetingRecording-{controller.Key}", path, this));
 			controller.AddDeviceMessenger(new IHasPresentationOnlyMeetingMessenger($"{Key}-presentationOnly-{controller.Key}", path, this));
@@ -648,486 +650,486 @@ Cameras = new List<IHasCameraControls>();
 			controller.AddDeviceMessenger(new IHasCodecRoomPresetsActionsMessenger($"{Key}-presetActions-{controller.Key}", path, this));
 		}
 
-	    #region Overrides of Device
+		#region Overrides of Device
 
-	    protected override void Initialize()
-	    {
-            _controller.ConnectionStateChanged   += OnControllerConnectionStateChanged;
-            _controller.PairRoomResult           += (s, e) => this.LogInformation("PairRoomResult [{Code}]: {Desc}", e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
-            _controller.MeetingStatusChanged     += OnControllerMeetingStatusChanged;
-            _controller.InstantMeetingStarted    += OnControllerInstantMeetingStarted;
-            _controller.StartPmiResult           += OnControllerStartPmiResult;
-            _controller.ExitMeeting              += OnControllerExitMeeting;
-            _controller.MeetingNeedsPassword     += OnControllerMeetingNeedsPassword;
-            _controller.MeetingInvite            += OnControllerMeetingInvite;
-            _controller.MeetingLockStatusChanged += OnControllerMeetingLockStatusChanged;
-            _controller.AudioMuteStatusChanged   += OnControllerAudioMuteStatusChanged;
-            _controller.RecordingStatusChanged   += OnControllerRecordingStatusChanged;
-            _controller.MeetingRecordingInfoChanged += OnControllerMeetingRecordingInfoChanged;
-            _controller.CameraPresetInfoChanged  += OnControllerCameraPresetInfoChanged;
-            _controller.RecordingRequestReceived += OnControllerRecordingRequestReceived;
-            _controller.ParticipantsInitialized  += OnControllerParticipantEvent;
-            _controller.UserJoined               += OnControllerParticipantEvent;
-            // UserLeft and UserUpdated: the ZRC SDK (.22) routes all roster changes through
-            // UserJoined with different NeedCleanUp/payload combinations; UserLeft and UserUpdated
-            // are never raised. Wire them defensively so they behave correctly if the SDK ever
-            // starts using them.
-            _controller.UserLeft                 += (s, e) => ApplyParticipantEvent(e, isLeaveEvent: true);
-            _controller.UserUpdated              += OnControllerParticipantEvent;
-            // ParticipantCountChanged is NOT subscribed here: the SDK fires both
-            // the participant-list callback and the count callback for every join/leave/update.
-            // UserJoined/Left/Updated already call Participants.OnParticipantsChanged(), so
-            // a separate ParticipantCountChanged handler would double-publish the roster event.
-            _controller.HostChanged              += OnControllerHostChanged;
-            _controller.SharingStatusChanged     += OnControllerSharingStatusChanged;
-            _controller.AirPlayStatusChanged     += OnControllerAirPlayStatusChanged;
-            _controller.VideoPageStatusChanged   += OnControllerVideoPageStatusChanged;
-            _controller.SipCallStatusChanged     += OnControllerSipCallStatusChanged;
-            _controller.ContactListChanged       += OnControllerContactListChanged;
-            _controller.MeetingListChanged       += OnControllerMeetingListChanged;
+		protected override void Initialize()
+		{
+			_controller.ConnectionStateChanged += OnControllerConnectionStateChanged;
+			_controller.PairRoomResult += (s, e) => this.LogInformation("PairRoomResult [{Code}]: {Desc}", e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
+			_controller.MeetingStatusChanged += OnControllerMeetingStatusChanged;
+			_controller.InstantMeetingStarted += OnControllerInstantMeetingStarted;
+			_controller.StartPmiResult += OnControllerStartPmiResult;
+			_controller.ExitMeeting += OnControllerExitMeeting;
+			_controller.MeetingNeedsPassword += OnControllerMeetingNeedsPassword;
+			_controller.MeetingInvite += OnControllerMeetingInvite;
+			_controller.MeetingLockStatusChanged += OnControllerMeetingLockStatusChanged;
+			_controller.AudioMuteStatusChanged += OnControllerAudioMuteStatusChanged;
+			_controller.RecordingStatusChanged += OnControllerRecordingStatusChanged;
+			_controller.MeetingRecordingInfoChanged += OnControllerMeetingRecordingInfoChanged;
+			_controller.CameraPresetInfoChanged += OnControllerCameraPresetInfoChanged;
+			_controller.RecordingRequestReceived += OnControllerRecordingRequestReceived;
+			_controller.ParticipantsInitialized += OnControllerParticipantEvent;
+			_controller.UserJoined += OnControllerParticipantEvent;
+			// UserLeft and UserUpdated: the ZRC SDK (.22) routes all roster changes through
+			// UserJoined with different NeedCleanUp/payload combinations; UserLeft and UserUpdated
+			// are never raised. Wire them defensively so they behave correctly if the SDK ever
+			// starts using them.
+			_controller.UserLeft += (s, e) => ApplyParticipantEvent(e, isLeaveEvent: true);
+			_controller.UserUpdated += OnControllerParticipantEvent;
+			// ParticipantCountChanged is NOT subscribed here: the SDK fires both
+			// the participant-list callback and the count callback for every join/leave/update.
+			// UserJoined/Left/Updated already call Participants.OnParticipantsChanged(), so
+			// a separate ParticipantCountChanged handler would double-publish the roster event.
+			_controller.HostChanged += OnControllerHostChanged;
+			_controller.SharingStatusChanged += OnControllerSharingStatusChanged;
+			_controller.AirPlayStatusChanged += OnControllerAirPlayStatusChanged;
+			_controller.VideoPageStatusChanged += OnControllerVideoPageStatusChanged;
+			_controller.SipCallStatusChanged += OnControllerSipCallStatusChanged;
+			_controller.ContactListChanged += OnControllerContactListChanged;
+			_controller.MeetingListChanged += OnControllerMeetingListChanged;
 
-            if (!_controller.Initialize(_props.SdkConfigPath))
-            {
-                // Surface init failures (bad/missing SdkConfigPath, native wrapper load failure, etc.)
-                // instead of silently proceeding as if the SDK were ready. _isConnected stays false,
-                // so command methods are gated off (ZrcSdkController.Guard) and the comms monitor stays offline.
-                this.LogError("ZRC SDK controller failed to initialize (sdkConfigPath=\"{Path}\"). Device will not be functional.", _props.SdkConfigPath);
-            }
-	    }
+			if (!_controller.Initialize(_props.SdkConfigPath))
+			{
+				// Surface init failures (bad/missing SdkConfigPath, native wrapper load failure, etc.)
+				// instead of silently proceeding as if the SDK were ready. _isConnected stays false,
+				// so command methods are gated off (ZrcSdkController.Guard) and the comms monitor stays offline.
+				this.LogError("ZRC SDK controller failed to initialize (sdkConfigPath=\"{Path}\"). Device will not be functional.", _props.SdkConfigPath);
+			}
+		}
 
-	    #endregion
+		#endregion
 
-        // ── SDK event handlers ───────────────────────────────────────────────
+		// ── SDK event handlers ───────────────────────────────────────────────
 
-        private void OnControllerConnectionStateChanged(object sender, SdkEventArgs e)
-        {
-            var state = (ConnectionState)e.ErrorCode;
-            var online = state == ConnectionState.Established || state == ConnectionState.Connected;
-            this.LogInformation("SDK connection state changed: {State} ({Code})", state, e.ErrorCode);
+		private void OnControllerConnectionStateChanged(object sender, SdkEventArgs e)
+		{
+			var state = (ConnectionState)e.ErrorCode;
+			var online = state == ConnectionState.Established || state == ConnectionState.Connected;
+			this.LogInformation("SDK connection state changed: {State} ({Code})", state, e.ErrorCode);
 
-            _isConnected = online;
-            _sdkMonitor.SetOnline(online);
+			_isConnected = online;
+			_sdkMonitor.SetOnline(online);
 
-            // Fetch initial data only once fully Connected. At Established the SDK service helpers
-            // (contacts, meeting list, settings) aren't ready yet, so these calls return failure;
-            // the Connected event that follows pairing is when they succeed.
-            if (state == ConnectionState.Connected)
-            {
-                SeedSpeakerVolume();
+			// Fetch initial data only once fully Connected. At Established the SDK service helpers
+			// (contacts, meeting list, settings) aren't ready yet, so these calls return failure;
+			// the Connected event that follows pairing is when they succeed.
+			if (state == ConnectionState.Connected)
+			{
+				SeedSpeakerVolume();
 
-                // Populate near-end cameras from the SDK device list (real device IDs).
-                SetUpCameras();
+				// Populate near-end cameras from the SDK device list (real device IDs).
+				SetUpCameras();
 
-                // Auto-download the directory/phonebook unless disabled by config. Results arrive
-                // asynchronously via ContactListChanged and populate DirectoryRoot.
-                if (!_props.DisablePhonebookAutoDownload)
-                {
-                    this.LogInformation("Requesting directory contacts (auto-download)");
-                    StartPhonebookFetch();
-                }
+				// Auto-download the directory/phonebook unless disabled by config. Results arrive
+				// asynchronously via ContactListChanged and populate DirectoryRoot.
+				if (!_props.DisablePhonebookAutoDownload)
+				{
+					this.LogInformation("Requesting directory contacts (auto-download)");
+					StartPhonebookFetch();
+				}
 
-                // Request the current schedule/bookings. Results arrive asynchronously via
-                // MeetingListChanged and populate CodecSchedule.
-                this.LogInformation("Requesting meeting schedule (bookings)");
-                _controller.ListMeeting();
-                StartBookingRefreshTimer();
+				// Request the current schedule/bookings. Results arrive asynchronously via
+				// MeetingListChanged and populate CodecSchedule.
+				this.LogInformation("Requesting meeting schedule (bookings)");
+				_controller.ListMeeting();
+				StartBookingRefreshTimer();
 
-                // Signal readiness: wires EISC camera joins (VideoCodecBase.LinkVideoCodecToApi)
-                // and unblocks MC /fullStatus (ZoomRoomMessenger.SendFullStatus gates on IsReady).
-                SetIsReady();
-            }
-            else if (!online)
-            {
-                StopBookingRefreshTimer();
-                ResetMeetingState();
-                lock (_directoryLock) _directoryContactsById.Clear();
-                PhonebookSyncState.CodecDisconnected();
-            }
-        }
+				// Signal readiness: wires EISC camera joins (VideoCodecBase.LinkVideoCodecToApi)
+				// and unblocks MC /fullStatus (ZoomRoomMessenger.SendFullStatus gates on IsReady).
+				SetIsReady();
+			}
+			else if (!online)
+			{
+				StopBookingRefreshTimer();
+				ResetMeetingState();
+				lock (_directoryLock) _directoryContactsById.Clear();
+				PhonebookSyncState.CodecDisconnected();
+			}
+		}
 
-        // Reads the current room speaker volume once on connect so the volume feedback reflects
-        // the real level. There is no SDK push for output-volume changes, so external (Zoom UI)
-        // changes won't update the feedback until the next set from this plugin.
-        private void SeedSpeakerVolume()
-        {
-            var sdkVolume = _controller.GetSpeakerVolume();
-            if (sdkVolume < 0f) return; // get failed (e.g. setting service not ready yet)
-            _sdkSpeakerVolumeLevel = (ushort)Math.Round(Math.Max(0f, Math.Min(SdkSpeakerVolumeMax, sdkVolume)) / SdkSpeakerVolumeMax * 65535f);
-            _sdkSpeakerMuted = _sdkSpeakerVolumeLevel == 0;
-            VolumeLevelFeedback.FireUpdate();
-            MuteFeedback.FireUpdate();
-        }
+		// Reads the current room speaker volume once on connect so the volume feedback reflects
+		// the real level. There is no SDK push for output-volume changes, so external (Zoom UI)
+		// changes won't update the feedback until the next set from this plugin.
+		private void SeedSpeakerVolume()
+		{
+			var sdkVolume = _controller.GetSpeakerVolume();
+			if (sdkVolume < 0f) return; // get failed (e.g. setting service not ready yet)
+			_sdkSpeakerVolumeLevel = (ushort)Math.Round(Math.Max(0f, Math.Min(SdkSpeakerVolumeMax, sdkVolume)) / SdkSpeakerVolumeMax * 65535f);
+			_sdkSpeakerMuted = _sdkSpeakerVolumeLevel == 0;
+			VolumeLevelFeedback.FireUpdate();
+			MuteFeedback.FireUpdate();
+		}
 
-        private void OnControllerMeetingStatusChanged(object sender, SdkEventArgs e)
-        {
-            var status = (MeetingStatus)e.ErrorCode;
-            this.LogInformation("MeetingStatusChanged: {Status} ({Code})", status, e.ErrorCode);
+		private void OnControllerMeetingStatusChanged(object sender, SdkEventArgs e)
+		{
+			var status = (MeetingStatus)e.ErrorCode;
+			this.LogInformation("MeetingStatusChanged: {Status} ({Code})", status, e.ErrorCode);
 
-            switch (status)
-            {
-                case MeetingStatus.InMeeting:
-                {
-                    if (ActiveCalls.Count == 0)
-                    {
-                        var call = new CodecActiveCallItem
-                        {
-                            Name    = _currentMeetingName,
-                            Number  = _currentMeetingNumber,
-                            Id      = _currentMeetingId,
-                            Status  = eCodecCallStatus.Connected,
-                            Type    = eCodecCallType.Video,
-                        };
-                        ActiveCalls.Add(call);
-                        OnCallStatusChange(call);
-                    }
-                    else
-                    {
-                        var existing = ActiveCalls.FirstOrDefault();
-                        if (existing != null)
-                        {
-                            existing.Status = eCodecCallStatus.Connected;
-                            OnCallStatusChange(existing);
-                        }
-                    }
-                    UpdateMeetingInfo();
-                    break;
-                }
-                case MeetingStatus.ConnectingToMeeting:
-                {
-                    if (ActiveCalls.Count == 0)
-                    {
-                        var call = new CodecActiveCallItem
-                        {
-                            Name    = _currentMeetingName,
-                            Number  = _currentMeetingNumber,
-                            Id      = _currentMeetingId,
-                            Status  = eCodecCallStatus.Connecting,
-                            Type    = eCodecCallType.Video,
-                        };
-                        ActiveCalls.Add(call);
-                        OnCallStatusChange(call);
-                    }
-                    break;
-                }
-                case MeetingStatus.NotInMeeting:
-                case MeetingStatus.LoggedOut:
-                {
-                    ResetMeetingState();
-                    break;
-                }
-            }
-        }
+			switch (status)
+			{
+				case MeetingStatus.InMeeting:
+					{
+						if (ActiveCalls.Count == 0)
+						{
+							var call = new CodecActiveCallItem
+							{
+								Name = _currentMeetingName,
+								Number = _currentMeetingNumber,
+								Id = _currentMeetingId,
+								Status = eCodecCallStatus.Connected,
+								Type = eCodecCallType.Video,
+							};
+							ActiveCalls.Add(call);
+							OnCallStatusChange(call);
+						}
+						else
+						{
+							var existing = ActiveCalls.FirstOrDefault();
+							if (existing != null)
+							{
+								existing.Status = eCodecCallStatus.Connected;
+								OnCallStatusChange(existing);
+							}
+						}
+						UpdateMeetingInfo();
+						break;
+					}
+				case MeetingStatus.ConnectingToMeeting:
+					{
+						if (ActiveCalls.Count == 0)
+						{
+							var call = new CodecActiveCallItem
+							{
+								Name = _currentMeetingName,
+								Number = _currentMeetingNumber,
+								Id = _currentMeetingId,
+								Status = eCodecCallStatus.Connecting,
+								Type = eCodecCallType.Video,
+							};
+							ActiveCalls.Add(call);
+							OnCallStatusChange(call);
+						}
+						break;
+					}
+				case MeetingStatus.NotInMeeting:
+				case MeetingStatus.LoggedOut:
+					{
+						ResetMeetingState();
+						break;
+					}
+			}
+		}
 
-        private void OnControllerInstantMeetingStarted(object sender, SdkEventArgs e)
-        {
-            this.LogInformation("InstantMeetingStarted code={Code} meetingNumber={Number}", e.ErrorCode, e.Message);
-            if (!string.IsNullOrEmpty(e.Message))
-            {
-                _currentMeetingNumber = e.Message;
-                _currentMeetingId     = e.Message;
-            }
-            UpdateMeetingInfo();
-        }
+		private void OnControllerInstantMeetingStarted(object sender, SdkEventArgs e)
+		{
+			this.LogInformation("InstantMeetingStarted code={Code} meetingNumber={Number}", e.ErrorCode, e.Message);
+			if (!string.IsNullOrEmpty(e.Message))
+			{
+				_currentMeetingNumber = e.Message;
+				_currentMeetingId = e.Message;
+			}
+			UpdateMeetingInfo();
+		}
 
-        private void OnControllerStartPmiResult(object sender, SdkEventArgs e)
-        {
-            this.LogInformation("StartPmiResult code={Code} meetingNumber={Number}", e.ErrorCode, e.Message);
-            if (!string.IsNullOrEmpty(e.Message))
-            {
-                _currentMeetingNumber = e.Message;
-                _currentMeetingId     = e.Message;
-            }
-            UpdateMeetingInfo();
-        }
+		private void OnControllerStartPmiResult(object sender, SdkEventArgs e)
+		{
+			this.LogInformation("StartPmiResult code={Code} meetingNumber={Number}", e.ErrorCode, e.Message);
+			if (!string.IsNullOrEmpty(e.Message))
+			{
+				_currentMeetingNumber = e.Message;
+				_currentMeetingId = e.Message;
+			}
+			UpdateMeetingInfo();
+		}
 
-        private void OnControllerExitMeeting(object sender, SdkEventArgs e)
-        {
-            this.LogInformation("ExitMeeting reason={Reason} ({Code})", (ExitMeetingReason)e.ErrorCode, e.ErrorCode);
-            ResetMeetingState();
-        }
+		private void OnControllerExitMeeting(object sender, SdkEventArgs e)
+		{
+			this.LogInformation("ExitMeeting reason={Reason} ({Code})", (ExitMeetingReason)e.ErrorCode, e.ErrorCode);
+			ResetMeetingState();
+		}
 
-        /// <summary>
-        /// Resets all meeting-scoped state fields. Called from ExitMeeting, NotInMeeting/LoggedOut,
-        /// and disconnect paths so every meeting-end scenario leaves the device in a consistent clean state.
-        /// </summary>
-        private void ResetMeetingState()
-        {
-            _currentMeetingId     = string.Empty;
-            _currentMeetingNumber = string.Empty;
-            _currentMeetingName   = string.Empty;
-            _sdkIsHost            = false;
+		/// <summary>
+		/// Resets all meeting-scoped state fields. Called from ExitMeeting, NotInMeeting/LoggedOut,
+		/// and disconnect paths so every meeting-end scenario leaves the device in a consistent clean state.
+		/// </summary>
+		private void ResetMeetingState()
+		{
+			_currentMeetingId = string.Empty;
+			_currentMeetingNumber = string.Empty;
+			_currentMeetingName = string.Empty;
+			_sdkIsHost = false;
 
-            _sdkMeetingLocked     = false;
-            _sdkIsRecording       = false;
-            _sdkCanRecord         = false;
-            _sdkSharingState      = 0;
-            _sdkPhoneOffHook      = false;
-            _sdkSipCallerName     = string.Empty;
-            _sdkSipCallerNumber   = string.Empty;
-            _recordConsentPromptIsVisible = false;
-            RecordConsentPromptIsVisible.FireUpdate();
-            lock (_participantLock)
-            {
-                _pinnedUserScreens.Clear();
-                _participantInfoByUserId.Clear();
-                Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
-            }
-            _pendingInviteCall = null;
-            ActiveCalls.Clear();
-            OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
-            UpdateFarEndCameras();
-            UpdateMeetingInfo();
-        }
+			_sdkMeetingLocked = false;
+			_sdkIsRecording = false;
+			_sdkCanRecord = false;
+			_sdkSharingState = 0;
+			_sdkPhoneOffHook = false;
+			_sdkSipCallerName = string.Empty;
+			_sdkSipCallerNumber = string.Empty;
+			_recordConsentPromptIsVisible = false;
+			RecordConsentPromptIsVisible.FireUpdate();
+			lock (_participantLock)
+			{
+				_pinnedUserScreens.Clear();
+				_participantInfoByUserId.Clear();
+				Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
+			}
+			_pendingInviteCall = null;
+			ActiveCalls.Clear();
+			OnCallStatusChange(new CodecActiveCallItem { Status = eCodecCallStatus.Disconnected });
+			UpdateFarEndCameras();
+			UpdateMeetingInfo();
+		}
 
-        private void OnControllerMeetingNeedsPassword(object sender, SdkEventArgs e)
-        {
-            var wrongAndRetry = e.ErrorCode == 1;
-            OnPasswordRequired(wrongAndRetry, false, false, "Password required to join this meeting.");
-        }
+		private void OnControllerMeetingNeedsPassword(object sender, SdkEventArgs e)
+		{
+			var wrongAndRetry = e.ErrorCode == 1;
+			OnPasswordRequired(wrongAndRetry, false, false, "Password required to join this meeting.");
+		}
 
-        private void OnControllerMeetingInvite(object sender, MeetingInviteEventArgs e)
-        {
-            // Fires on OnReceiveMeetingInviteNotification (a contact/room inviting this room into a
-            // meeting). The native side caches the full invite so it can be answered with
-            // AnswerMeetingInvite. Surface it as a Ringing/Incoming ActiveCall (with caller + meeting
-            // details) so the standard codec Accept/Reject (and touchpanel incoming-call UI) work.
-            var caller = string.IsNullOrEmpty(e.CallerName) ? "Incoming meeting invite" : e.CallerName;
-            this.LogInformation("MeetingInvite received from \"{Caller}\" meetingNumber={MeetingNumber} meetingId={MeetingId} contactId={ContactId}",
-                caller, e.MeetingNumber, e.MeetingId, e.CallerContactId);
+		private void OnControllerMeetingInvite(object sender, MeetingInviteEventArgs e)
+		{
+			// Fires on OnReceiveMeetingInviteNotification (a contact/room inviting this room into a
+			// meeting). The native side caches the full invite so it can be answered with
+			// AnswerMeetingInvite. Surface it as a Ringing/Incoming ActiveCall (with caller + meeting
+			// details) so the standard codec Accept/Reject (and touchpanel incoming-call UI) work.
+			var caller = string.IsNullOrEmpty(e.CallerName) ? "Incoming meeting invite" : e.CallerName;
+			this.LogInformation("MeetingInvite received from \"{Caller}\" meetingNumber={MeetingNumber} meetingId={MeetingId} contactId={ContactId}",
+				caller, e.MeetingNumber, e.MeetingId, e.CallerContactId);
 
-            if (_pendingInviteCall != null) return; // already ringing
+			if (_pendingInviteCall != null) return; // already ringing
 
-            _pendingInviteCall = new CodecActiveCallItem
-            {
-                Name      = caller,
-                Number    = e.MeetingNumber,
-                Id        = string.IsNullOrEmpty(e.MeetingNumber) ? "meeting-invite" : e.MeetingNumber,
-                Status    = eCodecCallStatus.Ringing,
-                Direction = eCodecCallDirection.Incoming,
-                Type      = eCodecCallType.Video,
-            };
-            ActiveCalls.Add(_pendingInviteCall);
-            OnCallStatusChange(_pendingInviteCall);
-        }
+			_pendingInviteCall = new CodecActiveCallItem
+			{
+				Name = caller,
+				Number = e.MeetingNumber,
+				Id = string.IsNullOrEmpty(e.MeetingNumber) ? "meeting-invite" : e.MeetingNumber,
+				Status = eCodecCallStatus.Ringing,
+				Direction = eCodecCallDirection.Incoming,
+				Type = eCodecCallType.Video,
+			};
+			ActiveCalls.Add(_pendingInviteCall);
+			OnCallStatusChange(_pendingInviteCall);
+		}
 
-        private void OnControllerMeetingLockStatusChanged(object sender, SdkEventArgs e)
-        {
-            _sdkMeetingLocked = e.ErrorCode == 1;
-            MeetingIsLockedFeedback.FireUpdate();
-            UpdateMeetingInfo();
-        }
+		private void OnControllerMeetingLockStatusChanged(object sender, SdkEventArgs e)
+		{
+			_sdkMeetingLocked = e.ErrorCode == 1;
+			MeetingIsLockedFeedback.FireUpdate();
+			UpdateMeetingInfo();
+		}
 
-        private void OnControllerAudioMuteStatusChanged(object sender, SdkEventArgs e)
-        {
-            _sdkAudioMuted = e.ErrorCode == 1;
-            PrivacyModeIsOnFeedback.FireUpdate();
-        }
+		private void OnControllerAudioMuteStatusChanged(object sender, SdkEventArgs e)
+		{
+			_sdkAudioMuted = e.ErrorCode == 1;
+			PrivacyModeIsOnFeedback.FireUpdate();
+		}
 
-        private void OnControllerRecordingStatusChanged(object sender, SdkEventArgs e)
-        {
-            _sdkIsRecording = e.ErrorCode == 1;
-            MeetingIsRecordingFeedback.FireUpdate();
-            UpdateMeetingInfo();
-        }
+		private void OnControllerRecordingStatusChanged(object sender, SdkEventArgs e)
+		{
+			_sdkIsRecording = e.ErrorCode == 1;
+			MeetingIsRecordingFeedback.FireUpdate();
+			UpdateMeetingInfo();
+		}
 
-        private void OnControllerMeetingRecordingInfoChanged(object sender, MeetingRecordingInfoEventArgs e)
-        {
-            _sdkCanRecord = e.CanIRecord;
-            UpdateMeetingInfo(); // refreshes MeetingInfo.CanRecord on the bridge join
-        }
+		private void OnControllerMeetingRecordingInfoChanged(object sender, MeetingRecordingInfoEventArgs e)
+		{
+			_sdkCanRecord = e.CanIRecord;
+			UpdateMeetingInfo(); // refreshes MeetingInfo.CanRecord on the bridge join
+		}
 
-        private void OnControllerRecordingRequestReceived(object sender, SdkEventArgs e)
-        {
-            _recordConsentPromptIsVisible = true;
-            RecordConsentPromptIsVisible.FireUpdate();
-        }
+		private void OnControllerRecordingRequestReceived(object sender, SdkEventArgs e)
+		{
+			_recordConsentPromptIsVisible = true;
+			RecordConsentPromptIsVisible.FireUpdate();
+		}
 
-        // ── Unified participant event handler ─────────────────────────────────────
-        // All four SDK participant events (Initialized, UserJoined, UserLeft, UserUpdated)
-        // are routed here. In SDK .22 only ParticipantsInitialized and UserJoined are raised
-        // (all roster changes arrive via UserJoined); UserLeft and UserUpdated are dead but wired
-        // defensively. UserLeft is routed with isLeaveEvent=true via a lambda at the call site (#22).
+		// ── Unified participant event handler ─────────────────────────────────────
+		// All four SDK participant events (Initialized, UserJoined, UserLeft, UserUpdated)
+		// are routed here. In SDK .22 only ParticipantsInitialized and UserJoined are raised
+		// (all roster changes arrive via UserJoined); UserLeft and UserUpdated are dead but wired
+		// defensively. UserLeft is routed with isLeaveEvent=true via a lambda at the call site (#22).
 
-        private void OnControllerParticipantEvent(object sender, ParticipantListEventArgs e)
-        {
-            if (e?.Participants == null) return;
-            LogIncomingParticipantRoles(sender?.GetType().Name ?? "unknown", e);
-            ApplyParticipantEvent(e, isLeaveEvent: false);
-        }
+		private void OnControllerParticipantEvent(object sender, ParticipantListEventArgs e)
+		{
+			if (e?.Participants == null) return;
+			LogIncomingParticipantRoles(sender?.GetType().Name ?? "unknown", e);
+			ApplyParticipantEvent(e, isLeaveEvent: false);
+		}
 
-        private void ApplyParticipantEvent(ParticipantListEventArgs e, bool isLeaveEvent)
-        {
-            lock (_participantLock)
-            {
-                if (e.NeedCleanUp)
-                {
-                    // Full roster replace (used by ParticipantsInitialized and clean-up UserJoined).
-                    Participants.CurrentParticipants = MapParticipants(e.Participants);
-                    TrackParticipantInfo(e.Participants, fullReplace: true, isLeave: false);
-                }
-                else if (isLeaveEvent)
-                {
-                    // UserLeft: remove named participants.
-                    foreach (var info in e.Participants)
-                    {
-                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                        if (existing != null) Participants.CurrentParticipants.Remove(existing);
-                    }
-                    TrackParticipantInfo(e.Participants, fullReplace: false, isLeave: true);
-                }
-                else
-                {
-                    // UserJoined / UserUpdated: add or update in place.
-                    // The SDK re-sends a participant via UserJoined when their role changes (e.g.
-                    // co-host promotion), so an already-present participant must be updated, not ignored.
-                    foreach (var info in e.Participants)
-                    {
-                        var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
-                        if (existing == null)
-                            Participants.CurrentParticipants.Add(MapParticipant(info));
-                        else
-                            UpdateParticipantFrom(existing, info);
-                    }
-                    TrackParticipantInfo(e.Participants, fullReplace: false, isLeave: false);
-                }
-            }
+		private void ApplyParticipantEvent(ParticipantListEventArgs e, bool isLeaveEvent)
+		{
+			lock (_participantLock)
+			{
+				if (e.NeedCleanUp)
+				{
+					// Full roster replace (used by ParticipantsInitialized and clean-up UserJoined).
+					Participants.CurrentParticipants = MapParticipants(e.Participants);
+					TrackParticipantInfo(e.Participants, fullReplace: true, isLeave: false);
+				}
+				else if (isLeaveEvent)
+				{
+					// UserLeft: remove named participants.
+					foreach (var info in e.Participants)
+					{
+						var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
+						if (existing != null) Participants.CurrentParticipants.Remove(existing);
+					}
+					TrackParticipantInfo(e.Participants, fullReplace: false, isLeave: true);
+				}
+				else
+				{
+					// UserJoined / UserUpdated: add or update in place.
+					// The SDK re-sends a participant via UserJoined when their role changes (e.g.
+					// co-host promotion), so an already-present participant must be updated, not ignored.
+					foreach (var info in e.Participants)
+					{
+						var existing = Participants.CurrentParticipants.FirstOrDefault(p => p.UserId == info.UserID);
+						if (existing == null)
+							Participants.CurrentParticipants.Add(MapParticipant(info));
+						else
+							UpdateParticipantFrom(existing, info);
+					}
+					TrackParticipantInfo(e.Participants, fullReplace: false, isLeave: false);
+				}
+			}
 
-            Participants.OnParticipantsChanged();
-            RefreshHostFromParticipants();
-            UpdateFarEndCameras();
-        }
+			Participants.OnParticipantsChanged();
+			RefreshHostFromParticipants();
+			UpdateFarEndCameras();
+		}
 
-        private void OnControllerHostChanged(object sender, SdkEventArgs e)
-        {
-            _sdkIsHost = e.ErrorCode == 1;
-            this.LogDebug("HostChanged: isHost={IsHost}", _sdkIsHost);
-            UpdateMeetingInfo();
-        }
+		private void OnControllerHostChanged(object sender, SdkEventArgs e)
+		{
+			_sdkIsHost = e.ErrorCode == 1;
+			this.LogDebug("HostChanged: isHost={IsHost}", _sdkIsHost);
+			UpdateMeetingInfo();
+		}
 
-        /// <summary>
-        /// Derives this room's host status from the roster (the <c>IsMyself</c> participant's
-        /// <c>IsHost</c> flag). The SDK's HostChanged notification only fires on a host *change*, so
-        /// when the room is host from the start of a meeting it never arrives — this captures it.
-        /// </summary>
-        private void RefreshHostFromParticipants()
-        {
-            bool isHost;
-            lock (_participantLock)
-                isHost = Participants.CurrentParticipants.Any(p => p.IsMyself && p.IsHost);
+		/// <summary>
+		/// Derives this room's host status from the roster (the <c>IsMyself</c> participant's
+		/// <c>IsHost</c> flag). The SDK's HostChanged notification only fires on a host *change*, so
+		/// when the room is host from the start of a meeting it never arrives — this captures it.
+		/// </summary>
+		private void RefreshHostFromParticipants()
+		{
+			bool isHost;
+			lock (_participantLock)
+				isHost = Participants.CurrentParticipants.Any(p => p.IsMyself && p.IsHost);
 
-            if (isHost == _sdkIsHost) return;
-            _sdkIsHost = isHost;
-            this.LogDebug("Host state from roster: isHost={IsHost}", isHost);
-            UpdateMeetingInfo();
-        }
+			if (isHost == _sdkIsHost) return;
+			_sdkIsHost = isHost;
+			this.LogDebug("Host state from roster: isHost={IsHost}", isHost);
+			UpdateMeetingInfo();
+		}
 
-        // Diagnostic (Debug): logs the raw role flags the SDK delivers for each participant in a
-        // participant event. Used to confirm whether co-host promotions actually arrive over the
-        // participant feed (vs. only via a no-data "participants changed" signal).
-        private void LogIncomingParticipantRoles(string source, ParticipantListEventArgs e)
-        {
-            if (e?.Participants == null) return;
-            foreach (var info in e.Participants)
-                this.LogDebug("{Source}: userId={UserId} name=\"{Name}\" isHost={IsHost} isCohost={IsCohost} isAltHost={IsAltHost} userType={UserType} cleanup={Cleanup}",
-                    source, info.UserID, info.UserName, info.IsHost, info.IsCohost, info.IsOriginalOrAlternativeHost, info.UserType, e.NeedCleanUp);
-        }
+		// Diagnostic (Debug): logs the raw role flags the SDK delivers for each participant in a
+		// participant event. Used to confirm whether co-host promotions actually arrive over the
+		// participant feed (vs. only via a no-data "participants changed" signal).
+		private void LogIncomingParticipantRoles(string source, ParticipantListEventArgs e)
+		{
+			if (e?.Participants == null) return;
+			foreach (var info in e.Participants)
+				this.LogDebug("{Source}: userId={UserId} name=\"{Name}\" isHost={IsHost} isCohost={IsCohost} isAltHost={IsAltHost} userType={UserType} cleanup={Cleanup}",
+					source, info.UserID, info.UserName, info.IsHost, info.IsCohost, info.IsOriginalOrAlternativeHost, info.UserType, e.NeedCleanUp);
+		}
 
-        private void OnControllerSharingStatusChanged(object sender, SharingStatusEventArgs e)
-        {
-            _sdkSharingState = e.SharingState;
-            SharingContentIsOnFeedback.FireUpdate();
-            ReceivingContent.FireUpdate();
-            CanSwapContentWithThumbnailFeedback.FireUpdate();
-        }
+		private void OnControllerSharingStatusChanged(object sender, SharingStatusEventArgs e)
+		{
+			_sdkSharingState = e.SharingState;
+			SharingContentIsOnFeedback.FireUpdate();
+			ReceivingContent.FireUpdate();
+			CanSwapContentWithThumbnailFeedback.FireUpdate();
+		}
 
-        private void OnControllerAirPlayStatusChanged(object sender, AirPlayStatusEventArgs e)
-        {
-            Status.Sharing.isAirHostClientConnected       = e.IsAirHostClientConnected;
-            Status.Sharing.isBlackMagicConnected          = e.IsBlackMagicConnected;
-            Status.Sharing.isBlackMagicDataAvailable      = e.IsBlackMagicDataAvailable;
-            Status.Sharing.isSharingBlackMagic            = e.IsSharingBlackMagic;
-            Status.Sharing.isDirectPresentationConnected  = e.IsDirectPresentationConnected;
-            Status.Sharing.password                       = e.Password;
-            Status.Sharing.serverName                     = e.ServerName;
-            Status.Sharing.wifiName                       = e.WifiName;
-            Status.Sharing.directPresentationPairingCode  = e.DirectPresentationPairingCode;
-            Status.Sharing.directPresentationSharingKey   = e.DirectPresentationSharingKey;
-            Status.Sharing.dispState                      = (zStatus.eDisplayState)e.InstructionDisplayState;
-            OnShareInfoChanged(Status.Sharing);
-        }
+		private void OnControllerAirPlayStatusChanged(object sender, AirPlayStatusEventArgs e)
+		{
+			Status.Sharing.isAirHostClientConnected = e.IsAirHostClientConnected;
+			Status.Sharing.isBlackMagicConnected = e.IsBlackMagicConnected;
+			Status.Sharing.isBlackMagicDataAvailable = e.IsBlackMagicDataAvailable;
+			Status.Sharing.isSharingBlackMagic = e.IsSharingBlackMagic;
+			Status.Sharing.isDirectPresentationConnected = e.IsDirectPresentationConnected;
+			Status.Sharing.password = e.Password;
+			Status.Sharing.serverName = e.ServerName;
+			Status.Sharing.wifiName = e.WifiName;
+			Status.Sharing.directPresentationPairingCode = e.DirectPresentationPairingCode;
+			Status.Sharing.directPresentationSharingKey = e.DirectPresentationSharingKey;
+			Status.Sharing.dispState = (zStatus.eDisplayState)e.InstructionDisplayState;
+			OnShareInfoChanged(Status.Sharing);
+		}
 
-        private void OnControllerVideoPageStatusChanged(object sender, VideoPageStatusEventArgs e)
-        {
-            _layoutIsOnFirstPage  = e.IsInFirstPage;
-            _layoutIsOnLastPage   = e.IsInLastPage;
-            _currentPageVideoType = e.PageVideoType; // keep the SDK's current page type for TurnVideoPage
-            LayoutViewIsOnFirstPageFeedback.FireUpdate();
-            LayoutViewIsOnLastPageFeedback.FireUpdate();
-        }
+		private void OnControllerVideoPageStatusChanged(object sender, VideoPageStatusEventArgs e)
+		{
+			_layoutIsOnFirstPage = e.IsInFirstPage;
+			_layoutIsOnLastPage = e.IsInLastPage;
+			_currentPageVideoType = e.PageVideoType; // keep the SDK's current page type for TurnVideoPage
+			LayoutViewIsOnFirstPageFeedback.FireUpdate();
+			LayoutViewIsOnLastPageFeedback.FireUpdate();
+		}
 
-        private void OnControllerSipCallStatusChanged(object sender, SIPCall e)
-        {
-            if (e == null) return;
-            _activeSipCallId    = e.CallID;
-            _sdkPhoneOffHook    = !System.Array.Exists(_sipTerminalStatuses, s => s == e.Status);
-            _sdkSipCallerName   = e.PeerDisplayName ?? string.Empty;
-            _sdkSipCallerNumber = e.PeerNumber      ?? string.Empty;
-            this.LogDebug("SipCallStatusChanged: CallID={CallId} Status={Status} OffHook={OffHook} Caller={Caller}",
-                _activeSipCallId, e.Status, _sdkPhoneOffHook, _sdkSipCallerName);
-            PhoneOffHookFeedback.FireUpdate();
-            CallerIdNameFeedback.FireUpdate();
-            CallerIdNumberFeedback.FireUpdate();
-        }
+		private void OnControllerSipCallStatusChanged(object sender, SIPCall e)
+		{
+			if (e == null) return;
+			_activeSipCallId = e.CallID;
+			_sdkPhoneOffHook = !System.Array.Exists(_sipTerminalStatuses, s => s == e.Status);
+			_sdkSipCallerName = e.PeerDisplayName ?? string.Empty;
+			_sdkSipCallerNumber = e.PeerNumber ?? string.Empty;
+			this.LogDebug("SipCallStatusChanged: CallID={CallId} Status={Status} OffHook={OffHook} Caller={Caller}",
+				_activeSipCallId, e.Status, _sdkPhoneOffHook, _sdkSipCallerName);
+			PhoneOffHookFeedback.FireUpdate();
+			CallerIdNameFeedback.FireUpdate();
+			CallerIdNumberFeedback.FireUpdate();
+		}
 
-        private static System.Collections.Generic.List<Participant> MapParticipants(ParticipantInfo[] participants)
-        {
-            var list = new System.Collections.Generic.List<Participant>();
-            foreach (var info in participants)
-                list.Add(MapParticipant(info));
-            return list;
-        }
+		private static System.Collections.Generic.List<Participant> MapParticipants(ParticipantInfo[] participants)
+		{
+			var list = new System.Collections.Generic.List<Participant>();
+			foreach (var info in participants)
+				list.Add(MapParticipant(info));
+			return list;
+		}
 
-        private static Participant MapParticipant(ParticipantInfo info)
-        {
-            return new Participant
-            {
-                UserId         = info.UserID,
-                Name           = info.UserName,
-                IsHost         = info.IsHost,
-                IsCohost       = info.IsCohost,
-                IsMyself       = info.IsMySelf,
-                AudioMuteFb    = info.AudioMuted,
-                VideoMuteFb    = !info.VideoSending,
-                HandIsRaisedFb = info.HandRaised,
-                // IsPinnedFb: SDK does not expose per-participant pin state; defaults to false.
-            };
-        }
+		private static Participant MapParticipant(ParticipantInfo info)
+		{
+			return new Participant
+			{
+				UserId = info.UserID,
+				Name = info.UserName,
+				IsHost = info.IsHost,
+				IsCohost = info.IsCohost,
+				IsMyself = info.IsMySelf,
+				AudioMuteFb = info.AudioMuted,
+				VideoMuteFb = !info.VideoSending,
+				HandIsRaisedFb = info.HandRaised,
+				// IsPinnedFb: SDK does not expose per-participant pin state; defaults to false.
+			};
+		}
 
-        /// <summary>
-        /// Updates an existing roster <see cref="Participant"/> in place from a fresh
-        /// <see cref="ParticipantInfo"/>. Shared by the UserJoined (role re-send) and UserUpdated
-        /// handlers so both apply the same mutable fields (role, mute, hand). UserId/IsMyself are
-        /// identity and never change for a given roster entry, so they are left untouched.
-        /// </summary>
-        private static void UpdateParticipantFrom(Participant existing, ParticipantInfo info)
-        {
-            existing.Name           = info.UserName;
-            existing.IsHost         = info.IsHost;
-            existing.IsCohost       = info.IsCohost;
-            existing.AudioMuteFb    = info.AudioMuted;
-            existing.VideoMuteFb    = !info.VideoSending;
-            existing.HandIsRaisedFb = info.HandRaised;
-        }
+		/// <summary>
+		/// Updates an existing roster <see cref="Participant"/> in place from a fresh
+		/// <see cref="ParticipantInfo"/>. Shared by the UserJoined (role re-send) and UserUpdated
+		/// handlers so both apply the same mutable fields (role, mute, hand). UserId/IsMyself are
+		/// identity and never change for a given roster entry, so they are left untouched.
+		/// </summary>
+		private static void UpdateParticipantFrom(Participant existing, ParticipantInfo info)
+		{
+			existing.Name = info.UserName;
+			existing.IsHost = info.IsHost;
+			existing.IsCohost = info.IsCohost;
+			existing.AudioMuteFb = info.AudioMuted;
+			existing.VideoMuteFb = !info.VideoSending;
+			existing.HandIsRaisedFb = info.HandRaised;
+		}
 
 
-        protected override void OnCallStatusChange(CodecActiveCallItem item)
-        {
-            base.OnCallStatusChange(item);
-        }
+		protected override void OnCallStatusChange(CodecActiveCallItem item)
+		{
+			base.OnCallStatusChange(item);
+		}
 
-        /// <summary>
-        /// Starts sharing HDMI source
-        /// </summary>
+		/// <summary>
+		/// Starts sharing HDMI source
+		/// </summary>
 		/// <summary>
 		/// Starts sharing the HDMI source (Zoom "black magic" cable share), also shown locally.
 		/// </summary>
@@ -1138,7 +1140,7 @@ Cameras = new List<IHasCameraControls>();
 		/// </summary>
 		public override void StopSharing() { _controller.StopShare(); }
 
-		
+
 
 		public override void PrivacyModeOn()
 		{
@@ -1283,71 +1285,79 @@ Cameras = new List<IHasCameraControls>();
 		/// <param name="joinMap"></param>
 		public void LinkZoomRoomToApi(BasicTriList trilist, ZoomRoomJoinMap joinMap)
 		{
-            // Manual phonebook fetch on the input side of join 100 (core wires the search-busy FB
-            // on the output side of the same join — input/output are independent). This is the only
-            // trigger to load contacts when DisablePhonebookAutoDownload is set.
-            trilist.SetSigFalseAction(joinMap.PhonebookGet.JoinNumber,
-                () =>
-                {
-                    lock (_directoryLock) _directoryContactsById.Clear();
-                    StartPhonebookFetch();
-                });
+			// Manual phonebook fetch on the input side of join 100 (core wires the search-busy FB
+			// on the output side of the same join — input/output are independent). This is the only
+			// trigger to load contacts when DisablePhonebookAutoDownload is set.
+			trilist.SetSigFalseAction(joinMap.PhonebookGet.JoinNumber,
+				() =>
+				{
+					lock (_directoryLock) _directoryContactsById.Clear();
+					StartPhonebookFetch();
+				});
 
-            var meetingInfoCodec = this as IHasMeetingInfo;
-            if (meetingInfoCodec != null)
-            {
-                if (meetingInfoCodec.MeetingInfo != null)
-                {
-                    trilist.SetBool(joinMap.MeetingCanRecord.JoinNumber, meetingInfoCodec.MeetingInfo.CanRecord);
-                }
+			var meetingInfoCodec = this as IHasMeetingInfo;
+			if (meetingInfoCodec != null)
+			{
+				if (meetingInfoCodec.MeetingInfo != null)
+				{
+					trilist.SetBool(joinMap.MeetingCanRecord.JoinNumber, meetingInfoCodec.MeetingInfo.CanRecord);
+				}
 
-                meetingInfoCodec.MeetingInfoChanged += (o, a) =>
-                    {
-                        trilist.SetBool(joinMap.MeetingCanRecord.JoinNumber, a.Info.CanRecord);
-                    };
-            }
+				meetingInfoCodec.MeetingInfoChanged += (o, a) =>
+					{
+						trilist.SetBool(joinMap.MeetingCanRecord.JoinNumber, a.Info.CanRecord);
+					};
+			}
 
-            var recordingCodec = this as IHasMeetingRecordingWithPrompt;
-            if (recordingCodec != null)
-            {
-                trilist.SetSigFalseAction(joinMap.StartRecording.JoinNumber, () => recordingCodec.StartRecording());
-                trilist.SetSigFalseAction(joinMap.StopRecording.JoinNumber, () => recordingCodec.StopRecording());
+			var recordingCodec = this as IHasMeetingRecordingWithPrompt;
+			if (recordingCodec != null)
+			{
+				trilist.SetSigFalseAction(joinMap.StartRecording.JoinNumber, () => recordingCodec.StartRecording());
+				trilist.SetSigFalseAction(joinMap.StopRecording.JoinNumber, () => recordingCodec.StopRecording());
 
-                recordingCodec.MeetingIsRecordingFeedback.LinkInputSig(trilist.BooleanInput[joinMap.StartRecording.JoinNumber]);
-                recordingCodec.MeetingIsRecordingFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.StopRecording.JoinNumber]);
+				recordingCodec.MeetingIsRecordingFeedback.LinkInputSig(trilist.BooleanInput[joinMap.StartRecording.JoinNumber]);
+				recordingCodec.MeetingIsRecordingFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.StopRecording.JoinNumber]);
 
-                trilist.SetSigFalseAction(joinMap.RecordingPromptAgree.JoinNumber, () => recordingCodec.RecordingPromptAcknowledgement(true));
-                trilist.SetSigFalseAction(joinMap.RecordingPromptDisagree.JoinNumber, () => recordingCodec.RecordingPromptAcknowledgement(false));
+				trilist.SetSigFalseAction(joinMap.RecordingPromptAgree.JoinNumber, () => recordingCodec.RecordingPromptAcknowledgement(true));
+				trilist.SetSigFalseAction(joinMap.RecordingPromptDisagree.JoinNumber, () => recordingCodec.RecordingPromptAcknowledgement(false));
 
-                recordingCodec.RecordConsentPromptIsVisible.LinkInputSig(trilist.BooleanInput[joinMap.RecordConsentPromptIsVisible.JoinNumber]);
-            }
+				recordingCodec.RecordConsentPromptIsVisible.LinkInputSig(trilist.BooleanInput[joinMap.RecordConsentPromptIsVisible.JoinNumber]);
+			}
 
 			var layoutsCodec = this as IHasZoomRoomLayouts;
 			if (layoutsCodec != null)
 			{
 				layoutsCodec.LayoutInfoChanged += (o, a) =>
 				{
-					trilist.SetBool(joinMap.LayoutGalleryIsAvailable.JoinNumber, 
-                        zConfiguration.eLayoutStyle.Gallery == (a.AvailableLayouts & zConfiguration.eLayoutStyle.Gallery));
+					trilist.SetBool(joinMap.LayoutGalleryIsAvailable.JoinNumber,
+						zConfiguration.eLayoutStyle.Gallery == (a.AvailableLayouts & zConfiguration.eLayoutStyle.Gallery));
 
-					trilist.SetBool(joinMap.LayoutSpeakerIsAvailable.JoinNumber, 
-                        zConfiguration.eLayoutStyle.Speaker == (a.AvailableLayouts & zConfiguration.eLayoutStyle.Speaker));
-					                                                             
-					                                                             
-					                                                              
-					trilist.SetBool(joinMap.LayoutStripIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Strip
-					                                                           ==
-					                                                           (a.AvailableLayouts & zConfiguration.eLayoutStyle.Strip));
-					trilist.SetBool(joinMap.LayoutShareAllIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ShareAll
-					                                                              ==
-					                                                              (a.AvailableLayouts &
-					                                                               zConfiguration.eLayoutStyle.ShareAll));
+					trilist.SetBool(joinMap.LayoutSpeakerIsAvailable.JoinNumber,
+						zConfiguration.eLayoutStyle.Speaker == (a.AvailableLayouts & zConfiguration.eLayoutStyle.Speaker));
+
+					trilist.SetBool(joinMap.LayoutStripIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Thumbnail
+																			   ==
+																			   (a.AvailableLayouts & zConfiguration.eLayoutStyle.Thumbnail));
+					trilist.SetBool(joinMap.LayoutShareAllIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ContentOnly
+																				  ==
+																				  (a.AvailableLayouts &
+																				   zConfiguration.eLayoutStyle.ContentOnly));
+					trilist.SetBool(joinMap.LayoutCancelContentOnlyIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.CancelContentOnly
+																				  ==
+																				  (a.AvailableLayouts &
+																				   zConfiguration.eLayoutStyle.CancelContentOnly));
+					trilist.SetBool(joinMap.LayoutDynamicIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Dynamic
+																				  ==
+																				  (a.AvailableLayouts &
+																				   zConfiguration.eLayoutStyle.Dynamic));
 
 					// pass the names used to set the layout through the bridge
 					trilist.SetString(joinMap.LayoutGalleryIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Gallery.ToString());
 					trilist.SetString(joinMap.LayoutSpeakerIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Speaker.ToString());
-					trilist.SetString(joinMap.LayoutStripIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Strip.ToString());
-					trilist.SetString(joinMap.LayoutShareAllIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ShareAll.ToString());
+					trilist.SetString(joinMap.LayoutStripIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Thumbnail.ToString());
+					trilist.SetString(joinMap.LayoutShareAllIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ContentOnly.ToString());
+					trilist.SetString(joinMap.LayoutCancelContentOnlyIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.CancelContentOnly.ToString());
+					trilist.SetString(joinMap.LayoutDynamicIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Dynamic.ToString());
 				};
 
 				trilist.SetSigFalseAction(joinMap.SwapContentWithThumbnail.JoinNumber, () => layoutsCodec.SwapContentWithThumbnail());
@@ -1368,7 +1378,7 @@ Cameras = new List<IHasCameraControls>();
 				{
 					try
 					{
-						var style = (zConfiguration.eLayoutStyle) Enum.Parse(typeof (zConfiguration.eLayoutStyle), s, true);
+						var style = (zConfiguration.eLayoutStyle)Enum.Parse(typeof(zConfiguration.eLayoutStyle), s, true);
 						SetLayout(style);
 					}
 					catch (Exception e)
@@ -1397,7 +1407,7 @@ Cameras = new List<IHasCameraControls>();
 				{
 					try
 					{
-						var size = (zConfiguration.eLayoutSize) Enum.Parse(typeof (zConfiguration.eLayoutSize), s, true);
+						var size = (zConfiguration.eLayoutSize)Enum.Parse(typeof(zConfiguration.eLayoutSize), s, true);
 						var cmd = SelfviewPipSizes.FirstOrDefault(c => c.Command.Equals(size.ToString()));
 						SelfviewPipSizeSet(cmd);
 					}
@@ -1408,43 +1418,44 @@ Cameras = new List<IHasCameraControls>();
 				});
 
 				layoutSizeCodec.SelfviewPipSizeFeedback.LinkInputSig(trilist.StringInput[joinMap.GetSetSelfviewPipSize.JoinNumber]);
-			}		    
+			}
 
-		    MeetingInfoChanged += (device, args) =>
-		    {
-                trilist.SetString(joinMap.MeetingInfoId.JoinNumber, args.Info.Id);
-                trilist.SetString(joinMap.MeetingInfoHost.JoinNumber, args.Info.Host);
-                trilist.SetString(joinMap.MeetingInfoPassword.JoinNumber, args.Info.Password);
-		        trilist.SetBool(joinMap.IsHost.JoinNumber, args.Info.IsHost);
-		        trilist.SetBool(joinMap.ShareOnlyMeeting.JoinNumber, args.Info.IsSharingMeeting);
-                trilist.SetBool(joinMap.WaitingForHost.JoinNumber, args.Info.WaitingForHost);
-                //trilist.SetString(joinMap.CurrentSource.JoinNumber, args.Info.ShareStatus);
-		    };
+			MeetingInfoChanged += (device, args) =>
+			{
+				trilist.SetString(joinMap.MeetingInfoId.JoinNumber, args.Info.Id);
+				trilist.SetString(joinMap.MeetingInfoHost.JoinNumber, args.Info.Host);
+				trilist.SetString(joinMap.MeetingInfoPassword.JoinNumber, args.Info.Password);
+				trilist.SetBool(joinMap.IsHost.JoinNumber, args.Info.IsHost);
+				trilist.SetBool(joinMap.ShareOnlyMeeting.JoinNumber, args.Info.IsSharingMeeting);
+				trilist.SetBool(joinMap.WaitingForHost.JoinNumber, args.Info.WaitingForHost);
+				//trilist.SetString(joinMap.CurrentSource.JoinNumber, args.Info.ShareStatus);
+			};
 
-		    trilist.SetSigFalseAction(joinMap.StartMeetingNow.JoinNumber, () => StartMeeting(0));
-            trilist.SetSigFalseAction(joinMap.ShareOnlyMeeting.JoinNumber, StartSharingOnlyMeeting);
-            trilist.SetSigFalseAction(joinMap.StartNormalMeetingFromSharingOnlyMeeting.JoinNumber, StartNormalMeetingFromSharingOnlyMeeting);
+			trilist.SetSigFalseAction(joinMap.StartMeetingNow.JoinNumber, () => StartMeeting(0));
+			trilist.SetSigFalseAction(joinMap.ShareOnlyMeeting.JoinNumber, StartSharingOnlyMeeting);
+			trilist.SetSigFalseAction(joinMap.StartNormalMeetingFromSharingOnlyMeeting.JoinNumber, StartNormalMeetingFromSharingOnlyMeeting);
 
 			trilist.SetStringSigAction(joinMap.SubmitPassword.JoinNumber, SubmitPassword);
 
-            // Subscribe to call status to clear ShowPasswordPrompt when in meeting
-            this.CallStatusChange += (o, a) =>
-                {
-                    if (a.CallItem.Status == eCodecCallStatus.Connected || a.CallItem.Status == eCodecCallStatus.Disconnected)
-                    {
-                        trilist.SetBool(joinMap.MeetingPasswordRequired.JoinNumber, false);
-                    }
+			// Subscribe to call status to clear ShowPasswordPrompt when in meeting
+			this.CallStatusChange += (o, a) =>
+				{
+					if (a.CallItem.Status == eCodecCallStatus.Connected || a.CallItem.Status == eCodecCallStatus.Disconnected)
+					{
+						trilist.SetBool(joinMap.MeetingPasswordRequired.JoinNumber, false);
+					}
 
-                };
+				};
 
-            trilist.SetSigFalseAction(joinMap.CancelJoinAttempt.JoinNumber, () => {
-                trilist.SetBool(joinMap.MeetingPasswordRequired.JoinNumber, false);
-                EndAllCalls();
-            });
+			trilist.SetSigFalseAction(joinMap.CancelJoinAttempt.JoinNumber, () =>
+			{
+				trilist.SetBool(joinMap.MeetingPasswordRequired.JoinNumber, false);
+				EndAllCalls();
+			});
 
 			PasswordRequired += (devices, args) =>
 			{
-                this.LogDebug("***********************************PaswordRequired. Message: {Message} Cancelled: {Cancelled} Last Incorrect: {LastIncorrect} Failed: {Failed}", args.Message, args.LoginAttemptCancelled, args.LastAttemptWasIncorrect, args.LoginAttemptFailed);
+				this.LogDebug("***********************************PaswordRequired. Message: {Message} Cancelled: {Cancelled} Last Incorrect: {LastIncorrect} Failed: {Failed}", args.Message, args.LoginAttemptCancelled, args.LastAttemptWasIncorrect, args.LoginAttemptFailed);
 
 				if (args.LoginAttemptCancelled)
 				{
@@ -1481,32 +1492,32 @@ Cameras = new List<IHasCameraControls>();
 				layoutSizeCodec.SelfviewPipSizeFeedback.FireUpdate();
 			};
 
-            var wirelessInfoCodec = this as IZoomWirelessShareInstructions;
-            if (wirelessInfoCodec != null)
-            {
-                if (Status != null && Status.Sharing != null)
-                {
-                    SetSharingStateJoins(Status.Sharing, trilist, joinMap);
-                }
+			var wirelessInfoCodec = this as IZoomWirelessShareInstructions;
+			if (wirelessInfoCodec != null)
+			{
+				if (Status != null && Status.Sharing != null)
+				{
+					SetSharingStateJoins(Status.Sharing, trilist, joinMap);
+				}
 
-                wirelessInfoCodec.ShareInfoChanged += (o, a) =>
-                    {
-                        SetSharingStateJoins(a.SharingStatus, trilist, joinMap);
-                    };
-            }
+				wirelessInfoCodec.ShareInfoChanged += (o, a) =>
+					{
+						SetSharingStateJoins(a.SharingStatus, trilist, joinMap);
+					};
+			}
 		}
 
-        void SetSharingStateJoins(zStatus.Sharing state, BasicTriList trilist, ZoomRoomJoinMap joinMap)
-        {
-            trilist.SetBool(joinMap.IsSharingAirplay.JoinNumber, state.isAirHostClientConnected);
-            trilist.SetBool(joinMap.IsSharingHdmi.JoinNumber, state.isBlackMagicConnected || state.isDirectPresentationConnected);
-            
-            trilist.SetString(joinMap.DisplayState.JoinNumber, state.dispState.ToString());
-            trilist.SetString(joinMap.AirplayShareCode.JoinNumber, state.password);
-            trilist.SetString(joinMap.LaptopShareKey.JoinNumber, state.directPresentationSharingKey);
-            trilist.SetString(joinMap.WifiName.JoinNumber, state.wifiName);
-            trilist.SetString(joinMap.ServerName.JoinNumber, state.serverName);
-        }
+		void SetSharingStateJoins(zStatus.Sharing state, BasicTriList trilist, ZoomRoomJoinMap joinMap)
+		{
+			trilist.SetBool(joinMap.IsSharingAirplay.JoinNumber, state.isAirHostClientConnected);
+			trilist.SetBool(joinMap.IsSharingHdmi.JoinNumber, state.isBlackMagicConnected || state.isDirectPresentationConnected);
+
+			trilist.SetString(joinMap.DisplayState.JoinNumber, state.dispState.ToString());
+			trilist.SetString(joinMap.AirplayShareCode.JoinNumber, state.password);
+			trilist.SetString(joinMap.LaptopShareKey.JoinNumber, state.directPresentationSharingKey);
+			trilist.SetString(joinMap.WifiName.JoinNumber, state.wifiName);
+			trilist.SetString(joinMap.ServerName.JoinNumber, state.serverName);
+		}
 
 		public override void ExecuteSwitch(object selector)
 		{
@@ -1584,14 +1595,14 @@ Cameras = new List<IHasCameraControls>();
 			_controller.JoinMeeting(number);
 		}
 
-        /// <summary>
-        /// Dials a meeting with a password
-        /// </summary>
-        public void Dial(string number, string password)
-        {
-            this.LogDebug("Dialing meeting number: {Number} with password: {Password}", number, password);
-            _controller.JoinMeetingWithPassword(number, password);
-        }
+		/// <summary>
+		/// Dials a meeting with a password
+		/// </summary>
+		public void Dial(string number, string password)
+		{
+			this.LogDebug("Dialing meeting number: {Number} with password: {Password}", number, password);
+			_controller.JoinMeetingWithPassword(number, password);
+		}
 
 		/// <summary>
 		/// Invites a contact to either a new meeting (if not already in a meeting) or the current meeting.
@@ -1600,7 +1611,7 @@ Cameras = new List<IHasCameraControls>();
 		/// <param name="contact"></param>
 		public override void Dial(IInvitableContact contact)
 		{
-            var ic = contact as InvitableDirectoryContact;
+			var ic = contact as InvitableDirectoryContact;
 
 			if (ic == null || string.IsNullOrEmpty(ic.ContactId))
 			{
@@ -1621,126 +1632,126 @@ Cameras = new List<IHasCameraControls>();
 			}
 		}
 
-        /// <summary>
-        /// Invites contacts to a new meeting for a specified duration
-        /// </summary>
-        /// <param name="contacts"></param>
-        /// <param name="duration"></param>
-        public void InviteContactsToNewMeeting(List<InvitableDirectoryContact> contacts, uint duration)
-        {
-            var contactIds = GetContactIds(contacts);
-            if (contactIds.Length == 0)
-            {
-                this.LogWarning("InviteContactsToNewMeeting: no valid contact IDs");
-                return;
-            }
+		/// <summary>
+		/// Invites contacts to a new meeting for a specified duration
+		/// </summary>
+		/// <param name="contacts"></param>
+		/// <param name="duration"></param>
+		public void InviteContactsToNewMeeting(List<InvitableDirectoryContact> contacts, uint duration)
+		{
+			var contactIds = GetContactIds(contacts);
+			if (contactIds.Length == 0)
+			{
+				this.LogWarning("InviteContactsToNewMeeting: no valid contact IDs");
+				return;
+			}
 
-            this.LogInformation("Starting new meeting with {Count} contact(s)", contactIds.Length);
-            _controller.MeetWithIMUsers(contactIds);
-        }
+			this.LogInformation("Starting new meeting with {Count} contact(s)", contactIds.Length);
+			_controller.MeetWithIMUsers(contactIds);
+		}
 
-        /// <summary>
-        /// Invites contacts to an existing meeting
-        /// </summary>
-        /// <param name="contacts"></param>
-        public void InviteContactsToExistingMeeting(List<InvitableDirectoryContact> contacts)
-        {
-            var contactIds = GetContactIds(contacts);
-            if (contactIds.Length == 0)
-            {
-                this.LogWarning("InviteContactsToExistingMeeting: no valid contact IDs");
-                return;
-            }
+		/// <summary>
+		/// Invites contacts to an existing meeting
+		/// </summary>
+		/// <param name="contacts"></param>
+		public void InviteContactsToExistingMeeting(List<InvitableDirectoryContact> contacts)
+		{
+			var contactIds = GetContactIds(contacts);
+			if (contactIds.Length == 0)
+			{
+				this.LogWarning("InviteContactsToExistingMeeting: no valid contact IDs");
+				return;
+			}
 
-            this.LogInformation("Inviting {Count} contact(s) to current meeting", contactIds.Length);
-            _controller.InviteAttendees(contactIds);
-        }
+			this.LogInformation("Inviting {Count} contact(s) to current meeting", contactIds.Length);
+			_controller.InviteAttendees(contactIds);
+		}
 
-        // Extracts the non-empty contact IDs from a list of invitable contacts.
-        private static string[] GetContactIds(List<InvitableDirectoryContact> contacts)
-        {
-            if (contacts == null) return Array.Empty<string>();
-            return contacts
-                .Where(c => c != null && !string.IsNullOrEmpty(c.ContactId))
-                .Select(c => c.ContactId)
-                .ToArray();
-        }
+		// Extracts the non-empty contact IDs from a list of invitable contacts.
+		private static string[] GetContactIds(List<InvitableDirectoryContact> contacts)
+		{
+			if (contacts == null) return Array.Empty<string>();
+			return contacts
+				.Where(c => c != null && !string.IsNullOrEmpty(c.ContactId))
+				.Select(c => c.ContactId)
+				.ToArray();
+		}
 
-        /// <summary>
-        /// Console/test helper: dumps the downloaded directory contacts with their contact IDs to the
-        /// log, so a `contactId` can be copied for <see cref="InviteContactById"/>. Mirrors
-        /// <see cref="LogParticipants"/>. The directory auto-downloads on connect.
-        /// </summary>
-        public void LogDirectory()
-        {
-            List<ContactInfo> snapshot;
-            lock (_directoryLock) snapshot = _directoryContactsById.Values.ToList();
+		/// <summary>
+		/// Console/test helper: dumps the downloaded directory contacts with their contact IDs to the
+		/// log, so a `contactId` can be copied for <see cref="InviteContactById"/>. Mirrors
+		/// <see cref="LogParticipants"/>. The directory auto-downloads on connect.
+		/// </summary>
+		public void LogDirectory()
+		{
+			List<ContactInfo> snapshot;
+			lock (_directoryLock) snapshot = _directoryContactsById.Values.ToList();
 
-            if (snapshot.Count == 0)
-            {
-                this.LogInformation("Directory: (empty — not yet downloaded, or phonebook auto-download disabled)");
-                return;
-            }
+			if (snapshot.Count == 0)
+			{
+				this.LogInformation("Directory: (empty — not yet downloaded, or phonebook auto-download disabled)");
+				return;
+			}
 
-            this.LogInformation("Directory ({Count}):", snapshot.Count);
-            foreach (var c in snapshot)
-            {
-                this.LogInformation(
-                    "  contactId=\"{ContactId}\" name=\"{Name}\" email=\"{Email}\" sip=\"{Sip}\"",
-                    c.ContactID,
-                    string.IsNullOrEmpty(c.ScreenName) ? string.Format("{0} {1}", c.FirstName, c.LastName).Trim() : c.ScreenName,
-                    c.Email, c.SipPhoneNumber);
-            }
-        }
+			this.LogInformation("Directory ({Count}):", snapshot.Count);
+			foreach (var c in snapshot)
+			{
+				this.LogInformation(
+					"  contactId=\"{ContactId}\" name=\"{Name}\" email=\"{Email}\" sip=\"{Sip}\"",
+					c.ContactID,
+					string.IsNullOrEmpty(c.ScreenName) ? string.Format("{0} {1}", c.FirstName, c.LastName).Trim() : c.ScreenName,
+					c.Email, c.SipPhoneNumber);
+			}
+		}
 
-        /// <summary>
-        /// Console/test helper: invites a directory contact by its <paramref name="contactId"/>. If this
-        /// room is in a meeting the contact is invited to it (<c>InviteAttendees</c>); otherwise a new
-        /// meeting is started with them (<c>MeetWithIMUsers</c>) — same routing as
-        /// <see cref="Dial(IInvitableContact)"/>, but callable from the console with a plain string.
-        /// Get IDs from <see cref="LogDirectory"/>.
-        /// </summary>
-        public void InviteContactById(string contactId)
-        {
-            if (string.IsNullOrEmpty(contactId))
-            {
-                this.LogWarning("InviteContactById: no contactId supplied");
-                return;
-            }
+		/// <summary>
+		/// Console/test helper: invites a directory contact by its <paramref name="contactId"/>. If this
+		/// room is in a meeting the contact is invited to it (<c>InviteAttendees</c>); otherwise a new
+		/// meeting is started with them (<c>MeetWithIMUsers</c>) — same routing as
+		/// <see cref="Dial(IInvitableContact)"/>, but callable from the console with a plain string.
+		/// Get IDs from <see cref="LogDirectory"/>.
+		/// </summary>
+		public void InviteContactById(string contactId)
+		{
+			if (string.IsNullOrEmpty(contactId))
+			{
+				this.LogWarning("InviteContactById: no contactId supplied");
+				return;
+			}
 
-            bool known;
-            lock (_directoryLock) known = _directoryContactsById.ContainsKey(contactId);
-            if (!known)
-                this.LogWarning("InviteContactById: {ContactId} not in the downloaded directory — sending anyway", contactId);
+			bool known;
+			lock (_directoryLock) known = _directoryContactsById.ContainsKey(contactId);
+			if (!known)
+				this.LogWarning("InviteContactById: {ContactId} not in the downloaded directory — sending anyway", contactId);
 
-            var ids = new[] { contactId };
-            if (IsInCall)
-            {
-                this.LogInformation("Inviting contact {ContactId} to the current meeting", contactId);
-                _controller.InviteAttendees(ids);
-            }
-            else
-            {
-                this.LogInformation("Starting a new meeting with contact {ContactId}", contactId);
-                _controller.MeetWithIMUsers(ids);
-            }
-        }
+			var ids = new[] { contactId };
+			if (IsInCall)
+			{
+				this.LogInformation("Inviting contact {ContactId} to the current meeting", contactId);
+				_controller.InviteAttendees(ids);
+			}
+			else
+			{
+				this.LogInformation("Starting a new meeting with contact {ContactId}", contactId);
+				_controller.MeetWithIMUsers(ids);
+			}
+		}
 
 
-        /// <summary>
-        /// Starts a PMI Meeting for the specified duration (or default meeting duration if 0 is specified)
-        /// </summary>
-        /// <param name="duration">duration of meeting</param>
-        public void StartMeeting(uint duration)
-        {
-            _controller.StartInstantMeeting();
-        }
+		/// <summary>
+		/// Starts a PMI Meeting for the specified duration (or default meeting duration if 0 is specified)
+		/// </summary>
+		/// <param name="duration">duration of meeting</param>
+		public void StartMeeting(uint duration)
+		{
+			_controller.StartInstantMeeting();
+		}
 
-        public void LeaveMeeting()
-        {
+		public void LeaveMeeting()
+		{
 			_meetingPasswordRequired = false;
 			_controller.LeaveMeeting();
-        }
+		}
 
 		/// <summary>
 		/// Ends the current meeting for all participants (host action), as opposed to <see cref="LeaveMeeting"/>
@@ -1930,23 +1941,23 @@ Cameras = new List<IHasCameraControls>();
 
 				CurrentDirectoryResultIsNotDirectoryRoot.FireUpdate();
 
-                var directoryResult = result;
+				var directoryResult = result;
 				var directoryIsRoot = CurrentDirectoryResultIsNotDirectoryRoot.BoolValue == false;
 
 				// If result is Root, create a copy and filter out contacts whose parent folder is not root
-                //if (!CurrentDirectoryResultIsNotDirectoryRoot.BoolValue)
-                //{
-                //    Debug.Console(2, this, "Filtering DirectoryRoot to remove contacts for display");
+				//if (!CurrentDirectoryResultIsNotDirectoryRoot.BoolValue)
+				//{
+				//    Debug.Console(2, this, "Filtering DirectoryRoot to remove contacts for display");
 
-                //    directoryResult.ResultsFolderId = result.ResultsFolderId;
-                //    directoryResult.AddFoldersToDirectory(result.Folders);
-                //    directoryResult.AddContactsToDirectory(
-                //        result.Contacts.Where((c) => c.ParentFolderId == result.ResultsFolderId).ToList());
-                //}
-                //else
-                //{
-                //    directoryResult = result;
-                //}
+				//    directoryResult.ResultsFolderId = result.ResultsFolderId;
+				//    directoryResult.AddFoldersToDirectory(result.Folders);
+				//    directoryResult.AddContactsToDirectory(
+				//        result.Contacts.Where((c) => c.ParentFolderId == result.ResultsFolderId).ToList());
+				//}
+				//else
+				//{
+				//    directoryResult = result;
+				//}
 
 				this.LogDebug("Updating directoryResult. IsOnRoot: {DirectoryIsRoot} Contact Count: {ContactCount}",
 					directoryIsRoot, directoryResult.Contacts.Count);
@@ -1962,7 +1973,7 @@ Cameras = new List<IHasCameraControls>();
 					});
 				}
 
-                
+
 			}
 			catch (Exception e)
 			{
@@ -2071,8 +2082,8 @@ Cameras = new List<IHasCameraControls>();
 				// case during roster churn that doesn't involve camera-capable participants (#32).
 				var existingIds = new HashSet<int>(
 					Cameras.OfType<ZoomRoomFarEndCamera>()
-					        .Where(c => c.Id.HasValue)
-					        .Select(c => c.Id.Value));
+							.Where(c => c.Id.HasValue)
+							.Select(c => c.Id.Value));
 				if (controllableIds.SetEquals(existingIds))
 					return;
 
@@ -2131,21 +2142,21 @@ Cameras = new List<IHasCameraControls>();
 			controlAction = -1; controlType = -1;
 			switch (state)
 			{
-				case eZoomRoomCameraState.Start:    controlType = 0; break; // CameraControlTypeStart
+				case eZoomRoomCameraState.Start: controlType = 0; break; // CameraControlTypeStart
 				case eZoomRoomCameraState.Continue: controlType = 1; break; // CameraControlTypeContinue
-				case eZoomRoomCameraState.Stop:     controlType = 2; break; // CameraControlTypeStop
+				case eZoomRoomCameraState.Stop: controlType = 2; break; // CameraControlTypeStop
 				default:
 					this.LogWarning("Camera command: unsupported state {State}", state);
 					return false;
 			}
 			switch (action)
 			{
-				case eZoomRoomCameraAction.Up:    controlAction = 0; break; // CameraControlActionMoveUp
-				case eZoomRoomCameraAction.Down:  controlAction = 1; break; // CameraControlActionMoveDown
-				case eZoomRoomCameraAction.Left:  controlAction = 2; break; // CameraControlActionMoveLeft
+				case eZoomRoomCameraAction.Up: controlAction = 0; break; // CameraControlActionMoveUp
+				case eZoomRoomCameraAction.Down: controlAction = 1; break; // CameraControlActionMoveDown
+				case eZoomRoomCameraAction.Left: controlAction = 2; break; // CameraControlActionMoveLeft
 				case eZoomRoomCameraAction.Right: controlAction = 3; break; // CameraControlActionMoveRight
-				case eZoomRoomCameraAction.In:    controlAction = 4; break; // CameraControlActionZoomIn
-				case eZoomRoomCameraAction.Out:   controlAction = 5; break; // CameraControlActionZoomOut
+				case eZoomRoomCameraAction.In: controlAction = 4; break; // CameraControlActionZoomIn
+				case eZoomRoomCameraAction.Out: controlAction = 5; break; // CameraControlActionZoomOut
 				default:
 					this.LogWarning("Camera command: unsupported action {Action}", action);
 					return false;
@@ -2157,184 +2168,184 @@ Cameras = new List<IHasCameraControls>();
 
 		public CodecParticipants Participants { get; private set; }
 
-        public void RemoveParticipant(int userId)
-        {
-            _controller.ExpelUser(userId);
-        }
+		public void RemoveParticipant(int userId)
+		{
+			_controller.ExpelUser(userId);
+		}
 
-        public void SetParticipantAsHost(int userId)
-        {
-            _controller.AssignHost(userId);
-        }
+		public void SetParticipantAsHost(int userId)
+		{
+			_controller.AssignHost(userId);
+		}
 
-        public void AdmitParticipantFromWaitingRoom(int userId)
-        {
-            _controller.AdmitUserFromWaitingRoom(userId);
-        }
+		public void AdmitParticipantFromWaitingRoom(int userId)
+		{
+			_controller.AdmitUserFromWaitingRoom(userId);
+		}
 
-        /// <summary>Admits everyone currently in the waiting room into the meeting.</summary>
-        public void AdmitAllParticipantsFromWaitingRoom()
-        {
-            _controller.AdmitAllFromWaitingRoom();
-        }
+		/// <summary>Admits everyone currently in the waiting room into the meeting.</summary>
+		public void AdmitAllParticipantsFromWaitingRoom()
+		{
+			_controller.AdmitAllFromWaitingRoom();
+		}
 
-        /// <summary>Moves a participant (back) into the waiting room.</summary>
-        public void PutParticipantInWaitingRoom(int userId)
-        {
-            _controller.PutUserInWaitingRoom(userId);
-        }
+		/// <summary>Moves a participant (back) into the waiting room.</summary>
+		public void PutParticipantInWaitingRoom(int userId)
+		{
+			_controller.PutUserInWaitingRoom(userId);
+		}
 
-        /// <summary>
-        /// The SDK participant infos currently in the waiting room (flagged "silent mode"). The ZRC SDK
-        /// has no dedicated waiting-room roster, so this is derived from the participant feed.
-        /// </summary>
-        private List<ParticipantInfo> GetWaitingRoomInfos()
-        {
-            lock (_participantLock)
-                return _participantInfoByUserId.Values.Where(p => p.IsInSilentMode).ToList();
-        }
+		/// <summary>
+		/// The SDK participant infos currently in the waiting room (flagged "silent mode"). The ZRC SDK
+		/// has no dedicated waiting-room roster, so this is derived from the participant feed.
+		/// </summary>
+		private List<ParticipantInfo> GetWaitingRoomInfos()
+		{
+			lock (_participantLock)
+				return _participantInfoByUserId.Values.Where(p => p.IsInSilentMode).ToList();
+		}
 
-        /// <summary>
-        /// Returns a snapshot of the current participant list taken under <c>_participantLock</c>
-        /// so serialization threads don't race with SDK mutation callbacks.
-        /// </summary>
-        public List<Participant> GetParticipantsSnapshot()
-        {
-            lock (_participantLock)
-                return new System.Collections.Generic.List<Participant>(Participants.CurrentParticipants);
-        }
+		/// <summary>
+		/// Returns a snapshot of the current participant list taken under <c>_participantLock</c>
+		/// so serialization threads don't race with SDK mutation callbacks.
+		/// </summary>
+		public List<Participant> GetParticipantsSnapshot()
+		{
+			lock (_participantLock)
+				return new System.Collections.Generic.List<Participant>(Participants.CurrentParticipants);
+		}
 
-        /// <summary>
-        /// Participants currently in the waiting room (derived from the "silent mode" flag). Mapped to the
-        /// standard <see cref="Participant"/> shape so the mobile UI can render them like the main roster.
-        /// </summary>
-        public List<Participant> WaitingRoomParticipants => GetWaitingRoomInfos().Select(MapParticipant).ToList();
+		/// <summary>
+		/// Participants currently in the waiting room (derived from the "silent mode" flag). Mapped to the
+		/// standard <see cref="Participant"/> shape so the mobile UI can render them like the main roster.
+		/// </summary>
+		public List<Participant> WaitingRoomParticipants => GetWaitingRoomInfos().Select(MapParticipant).ToList();
 
-        /// <summary>Removes (expels) everyone currently in the waiting room.</summary>
-        public void RemoveAllFromWaitingRoom()
-        {
-            foreach (var info in GetWaitingRoomInfos())
-                _controller.ExpelUser(info.UserID);
-        }
+		/// <summary>Removes (expels) everyone currently in the waiting room.</summary>
+		public void RemoveAllFromWaitingRoom()
+		{
+			foreach (var info in GetWaitingRoomInfos())
+				_controller.ExpelUser(info.UserID);
+		}
 
-        #region IHasCodecRoomPresets (camera presets — ZRC SDK, max 3 per camera, idx 0–2)
+		#region IHasCodecRoomPresets (camera presets — ZRC SDK, max 3 per camera, idx 0–2)
 
-        /// <inheritdoc />
-        public event EventHandler<EventArgs> CodecRoomPresetsListHasChanged;
+		/// <inheritdoc />
+		public event EventHandler<EventArgs> CodecRoomPresetsListHasChanged;
 
-        /// <inheritdoc />
-        public List<CodecRoomPreset> NearEndPresets { get; private set; } = new List<CodecRoomPreset>();
+		/// <inheritdoc />
+		public List<CodecRoomPreset> NearEndPresets { get; private set; } = new List<CodecRoomPreset>();
 
-        /// <inheritdoc />
-        public List<CodecRoomPreset> FarEndRoomPresets { get; private set; } = new List<CodecRoomPreset>();
+		/// <inheritdoc />
+		public List<CodecRoomPreset> FarEndRoomPresets { get; private set; } = new List<CodecRoomPreset>();
 
-        // Presets target the currently-selected camera; empty id falls back to the main near-end camera.
-        private string CurrentCameraDeviceId => _controller.GetCurrentCamera()?.Id ?? string.Empty;
+		// Presets target the currently-selected camera; empty id falls back to the main near-end camera.
+		private string CurrentCameraDeviceId => _controller.GetCurrentCamera()?.Id ?? string.Empty;
 
-        /// <inheritdoc />
-        public void CodecRoomPresetSelect(int preset)
-        {
-            // Bridge (SIMPL/Essentials) uses 1-based preset IDs; ZRC SDK slots are 0-based.
-            if (preset < 1) return;
-            _controller.GoToCameraPreset((uint)(preset - 1), CurrentCameraDeviceId);
-        }
+		/// <inheritdoc />
+		public void CodecRoomPresetSelect(int preset)
+		{
+			// Bridge (SIMPL/Essentials) uses 1-based preset IDs; ZRC SDK slots are 0-based.
+			if (preset < 1) return;
+			_controller.GoToCameraPreset((uint)(preset - 1), CurrentCameraDeviceId);
+		}
 
-        /// <inheritdoc />
-        public void CodecRoomPresetStore(int preset, string description)
-        {
-            // Bridge (SIMPL/Essentials) uses 1-based preset IDs; ZRC SDK slots are 0-based.
-            if (preset < 1) return;
-            var slot = (uint)(preset - 1);
-            _controller.SetCameraPreset(slot, CurrentCameraDeviceId);
-            if (!string.IsNullOrEmpty(description))
-                _controller.NameCameraPreset(slot, description, CurrentCameraDeviceId);
-        }
+		/// <inheritdoc />
+		public void CodecRoomPresetStore(int preset, string description)
+		{
+			// Bridge (SIMPL/Essentials) uses 1-based preset IDs; ZRC SDK slots are 0-based.
+			if (preset < 1) return;
+			var slot = (uint)(preset - 1);
+			_controller.SetCameraPreset(slot, CurrentCameraDeviceId);
+			if (!string.IsNullOrEmpty(description))
+				_controller.NameCameraPreset(slot, description, CurrentCameraDeviceId);
+		}
 
-        /// <inheritdoc />
-        public void SelectFarEndPreset(int preset) =>
-            this.LogDebug("SelectFarEndPreset({Preset}) not supported by Zoom Room camera presets", preset);
+		/// <inheritdoc />
+		public void SelectFarEndPreset(int preset) =>
+			this.LogDebug("SelectFarEndPreset({Preset}) not supported by Zoom Room camera presets", preset);
 
-        private void OnControllerCameraPresetInfoChanged(object sender, CameraPresetInfoEventArgs e)
-        {
-            NearEndPresets = e.Presets
-                .Select(p => new CodecRoomPreset(
-                    p.Index,
-                    string.IsNullOrEmpty(p.Name) ? string.Format("Preset {0}", p.Index + 1) : p.Name,
-                    false, true))
-                .ToList();
-            CodecRoomPresetsListHasChanged?.Invoke(this, EventArgs.Empty);
-        }
+		private void OnControllerCameraPresetInfoChanged(object sender, CameraPresetInfoEventArgs e)
+		{
+			NearEndPresets = e.Presets
+				.Select(p => new CodecRoomPreset(
+					p.Index,
+					string.IsNullOrEmpty(p.Name) ? string.Format("Preset {0}", p.Index + 1) : p.Name,
+					false, true))
+				.ToList();
+			CodecRoomPresetsListHasChanged?.Invoke(this, EventArgs.Empty);
+		}
 
-        #endregion
+		#endregion
 
-        /// <summary>
-        /// Console/test helper: lists participants currently in the waiting room. The ZRC SDK has no
-        /// dedicated waiting-room roster — waiting users arrive in the normal participant feed flagged
-        /// "silent mode" (<see cref="ParticipantInfo.IsInSilentMode"/>). Admit them with
-        /// <see cref="AdmitParticipantFromWaitingRoom"/> / <see cref="AdmitAllParticipantsFromWaitingRoom"/>.
-        /// </summary>
-        public void LogWaitingRoom()
-        {
-            var waiting = GetWaitingRoomInfos();
+		/// <summary>
+		/// Console/test helper: lists participants currently in the waiting room. The ZRC SDK has no
+		/// dedicated waiting-room roster — waiting users arrive in the normal participant feed flagged
+		/// "silent mode" (<see cref="ParticipantInfo.IsInSilentMode"/>). Admit them with
+		/// <see cref="AdmitParticipantFromWaitingRoom"/> / <see cref="AdmitAllParticipantsFromWaitingRoom"/>.
+		/// </summary>
+		public void LogWaitingRoom()
+		{
+			var waiting = GetWaitingRoomInfos();
 
-            if (waiting.Count == 0)
-            {
-                this.LogInformation("Waiting room: (empty — no participants in silent mode)");
-                return;
-            }
+			if (waiting.Count == 0)
+			{
+				this.LogInformation("Waiting room: (empty — no participants in silent mode)");
+				return;
+			}
 
-            this.LogInformation("Waiting room ({Count}):", waiting.Count);
-            foreach (var p in waiting)
-                this.LogInformation("  userId={UserId} name=\"{Name}\"", p.UserID, p.UserName);
-        }
+			this.LogInformation("Waiting room ({Count}):", waiting.Count);
+			foreach (var p in waiting)
+				this.LogInformation("  userId={UserId} name=\"{Name}\"", p.UserID, p.UserName);
+		}
 
-        /// <summary>
-        /// Console/test helper: logs the current participants and their userIds so per-participant
-        /// commands (MuteVideoForParticipant, MuteAudioForParticipant, PinUser, etc.) can be exercised
-        /// via devjson. Call with: devjson {"deviceKey":"...","methodName":"LogParticipants","params":[]}
-        /// </summary>
-        public void LogParticipants()
-        {
-            var list = Participants.CurrentParticipants;
-            if (list == null || list.Count == 0)
-            {
-                this.LogInformation("Participants: (none — not in a meeting or list not yet populated)");
-                return;
-            }
+		/// <summary>
+		/// Console/test helper: logs the current participants and their userIds so per-participant
+		/// commands (MuteVideoForParticipant, MuteAudioForParticipant, PinUser, etc.) can be exercised
+		/// via devjson. Call with: devjson {"deviceKey":"...","methodName":"LogParticipants","params":[]}
+		/// </summary>
+		public void LogParticipants()
+		{
+			var list = Participants.CurrentParticipants;
+			if (list == null || list.Count == 0)
+			{
+				this.LogInformation("Participants: (none — not in a meeting or list not yet populated)");
+				return;
+			}
 
-            this.LogInformation("Participants ({Count}):", list.Count);
-            foreach (var p in list)
-            {
-                this.LogInformation(
-                    "  userId={UserId} name=\"{Name}\" host={IsHost} cohost={IsCohost} self={IsMyself} audioMuted={AudioMuted} videoMuted={VideoMuted} handRaised={HandRaised}",
-                    p.UserId, p.Name, p.IsHost, p.IsCohost, p.IsMyself, p.AudioMuteFb, p.VideoMuteFb, p.HandIsRaisedFb);
-            }
-        }
+			this.LogInformation("Participants ({Count}):", list.Count);
+			foreach (var p in list)
+			{
+				this.LogInformation(
+					"  userId={UserId} name=\"{Name}\" host={IsHost} cohost={IsCohost} self={IsMyself} audioMuted={AudioMuted} videoMuted={VideoMuted} handRaised={HandRaised}",
+					p.UserId, p.Name, p.IsHost, p.IsCohost, p.IsMyself, p.AudioMuteFb, p.VideoMuteFb, p.HandIsRaisedFb);
+			}
+		}
 
-        /// <summary>
-        /// Console/test helper: logs current meeting info, including <c>CanRecord</c> (the
-        /// <c>MeetingCanRecord</c> bridge feedback) which is observe-only and has no command.
-        /// Join a recording-permitted vs. not-permitted meeting and re-run to see it change.
-        /// </summary>
-        public void LogMeetingInfo()
-        {
-            this.LogInformation(
-                "Meeting info: inCall={InCall} canRecord={CanRecord} isRecording={IsRecording} locked={Locked} isHost={IsHost}",
-                IsInCall, _sdkCanRecord, _sdkIsRecording, _sdkMeetingLocked, _sdkIsHost);
-        }
+		/// <summary>
+		/// Console/test helper: logs current meeting info, including <c>CanRecord</c> (the
+		/// <c>MeetingCanRecord</c> bridge feedback) which is observe-only and has no command.
+		/// Join a recording-permitted vs. not-permitted meeting and re-run to see it change.
+		/// </summary>
+		public void LogMeetingInfo()
+		{
+			this.LogInformation(
+				"Meeting info: inCall={InCall} canRecord={CanRecord} isRecording={IsRecording} locked={Locked} isHost={IsHost}",
+				IsInCall, _sdkCanRecord, _sdkIsRecording, _sdkMeetingLocked, _sdkIsHost);
+		}
 
-        /// <summary>
-        /// Console test shim: logs the room's current speaker volume (the value behind
-        /// <c>VolumeLevelFeedback</c>) so the seed-on-reconnect behavior can be verified from the
-        /// CLI without a bridge/touchpanel. After setting a volume and rebooting, this should report
-        /// the room's current level rather than 0.
-        /// </summary>
-        public void LogVolume()
-        {
-            this.LogInformation(
-                "Volume: level={Level} (0-65535) muted={Muted}",
-                _sdkSpeakerVolumeLevel, _sdkSpeakerMuted);
-        }
+		/// <summary>
+		/// Console test shim: logs the room's current speaker volume (the value behind
+		/// <c>VolumeLevelFeedback</c>) so the seed-on-reconnect behavior can be verified from the
+		/// CLI without a bridge/touchpanel. After setting a volume and rebooting, this should report
+		/// the room's current level rather than 0.
+		/// </summary>
+		public void LogVolume()
+		{
+			this.LogInformation(
+				"Volume: level={Level} (0-65535) muted={Muted}",
+				_sdkSpeakerVolumeLevel, _sdkSpeakerMuted);
+		}
 
 		#endregion
 
@@ -2362,10 +2373,10 @@ Cameras = new List<IHasCameraControls>();
 
 		#region IHasParticipantAudioMute Members
 
-        public void MuteAudioForAllParticipants()
-        {
-            _controller.MuteAllAudio(true);
-        }
+		public void MuteAudioForAllParticipants()
+		{
+			_controller.MuteAllAudio(true);
+		}
 
 		public void MuteAudioForParticipant(int userId)
 		{
@@ -2453,16 +2464,16 @@ Cameras = new List<IHasCameraControls>();
 			// Track on success so ToggleParticipantPinState can later unpin (the SDK exposes no
 			// per-participant pin state of its own).
 			if (_controller.PinUserOnScreen(userId, screenIndex))
-                lock (_participantLock) _pinnedUserScreens[userId] = screenIndex;
-        }
+				lock (_participantLock) _pinnedUserScreens[userId] = screenIndex;
+		}
 
-        public void UnPinParticipant(int userId)
-        {
-            int screen;
-            lock (_participantLock) screen = _pinnedUserScreens.TryGetValue(userId, out var s) ? s : 0;
-            if (_controller.UnpinUserFromScreen(userId, screen))
-                lock (_participantLock) _pinnedUserScreens.Remove(userId);
-        }
+		public void UnPinParticipant(int userId)
+		{
+			int screen;
+			lock (_participantLock) screen = _pinnedUserScreens.TryGetValue(userId, out var s) ? s : 0;
+			if (_controller.UnpinUserFromScreen(userId, screen))
+				lock (_participantLock) _pinnedUserScreens.Remove(userId);
+		}
 
 		public void ToggleParticipantPinState(int userId, int screenIndex)
 		{
@@ -2577,11 +2588,11 @@ Cameras = new List<IHasCameraControls>();
 		{
 			switch ((command ?? string.Empty).ToLower())
 			{
-				case "upleft":    return 7; // VideoThumbPositionUpLeft
-				case "upright":   return 3; // VideoThumbPositionUpRight
+				case "upleft": return 7; // VideoThumbPositionUpLeft
+				case "upright": return 3; // VideoThumbPositionUpRight
 				case "downright": return 5; // VideoThumbPositionDownRight
-				case "downleft":  return 8; // VideoThumbPositionDownLeft
-				default:          return 3; // default UpRight
+				case "downleft": return 8; // VideoThumbPositionDownLeft
+				default: return 3; // default UpRight
 			}
 		}
 
@@ -2590,12 +2601,12 @@ Cameras = new List<IHasCameraControls>();
 		{
 			switch ((command ?? string.Empty).ToLower())
 			{
-				case "off":   return 0; // VideoThumbSizeOff (hides the PiP)
+				case "off": return 0; // VideoThumbSizeOff (hides the PiP)
 				case "size1": return 1; // VideoThumbSize1x
 				case "size2": return 2; // VideoThumbSize2x
 				case "size3": return 3; // VideoThumbSize3x
 				case "strip": return 4; // VideoThumbSizeVideoStripe
-				default:      return 1; // default 1x
+				default: return 1; // default 1x
 			}
 		}
 
@@ -2702,8 +2713,8 @@ Cameras = new List<IHasCameraControls>();
 		// Incoming(2), Ringing(3), Accepted(9), Hold(10), InCall(11),
 		// RemoteHold(13), BothHold(14), SessionInProgress(15), StayOnPhone(16).
 		private static readonly int[] _sipTerminalStatuses = { 0, 1, 4, 5, 6, 7, 8, 12 };
-		private bool   _sdkPhoneOffHook;
-		private string _sdkSipCallerName   = string.Empty;
+		private bool _sdkPhoneOffHook;
+		private string _sdkSipCallerName = string.Empty;
 		private string _sdkSipCallerNumber = string.Empty;
 
 		private Func<bool> PhoneOffHookFeedbackFunc
@@ -2798,36 +2809,38 @@ Cameras = new List<IHasCameraControls>();
 		{
 			this.LogInformation("Computing available layouts...");
 			// The JSON-over-SSH pipeline that fed Status.Layout is removed; the ZRC SDK has no
-			// per-room layout-capability query. Zoom Rooms universally support all four layout
+			// per-room layout-capability query. Zoom Rooms universally support all layout
 			// styles, so report them all as available. Revisit if the SDK gains a capability API.
 			AvailableLayouts = zConfiguration.eLayoutStyle.Gallery
-			                 | zConfiguration.eLayoutStyle.Speaker
-			                 | zConfiguration.eLayoutStyle.Strip
-			                 | zConfiguration.eLayoutStyle.ShareAll;
+							 | zConfiguration.eLayoutStyle.Speaker
+							 | zConfiguration.eLayoutStyle.Thumbnail
+							 | zConfiguration.eLayoutStyle.ContentOnly
+							 | zConfiguration.eLayoutStyle.CancelContentOnly
+							 | zConfiguration.eLayoutStyle.Dynamic;
 			this.LogInformation("availablelayouts: {AvailableLayouts} (static — SDK has no capability query)", AvailableLayouts);
 		}
 
-        private void OnLayoutInfoChanged()
-        {
-            var handler = LayoutInfoChanged;
-            if (handler != null)
-            {
+		private void OnLayoutInfoChanged()
+		{
+			var handler = LayoutInfoChanged;
+			if (handler != null)
+			{
 
-                var currentLayout = zConfiguration.eLayoutStyle.None;
+				var currentLayout = zConfiguration.eLayoutStyle.None;
 
-                currentLayout = (zConfiguration.eLayoutStyle)Enum.Parse(typeof(zConfiguration.eLayoutStyle), string.IsNullOrEmpty(LocalLayoutFeedback.StringValue) ? "None" : LocalLayoutFeedback.StringValue, true);            
+				currentLayout = (zConfiguration.eLayoutStyle)Enum.Parse(typeof(zConfiguration.eLayoutStyle), string.IsNullOrEmpty(LocalLayoutFeedback.StringValue) ? "None" : LocalLayoutFeedback.StringValue, true);
 
-                handler(this, new LayoutInfoChangedEventArgs()
-                {
-                    AvailableLayouts = AvailableLayouts,
-                    CurrentSelectedLayout = currentLayout,
-                    LayoutViewIsOnFirstPage = LayoutViewIsOnFirstPageFeedback.BoolValue,
-                    LayoutViewIsOnLastPage = LayoutViewIsOnLastPageFeedback.BoolValue,
-                    CanSwapContentWithThumbnail = CanSwapContentWithThumbnailFeedback.BoolValue,
-                    ContentSwappedWithThumbnail = ContentSwappedWithThumbnailFeedback.BoolValue,
-                });
-            }
-        }
+				handler(this, new LayoutInfoChangedEventArgs()
+				{
+					AvailableLayouts = AvailableLayouts,
+					CurrentSelectedLayout = currentLayout,
+					LayoutViewIsOnFirstPage = LayoutViewIsOnFirstPageFeedback.BoolValue,
+					LayoutViewIsOnLastPage = LayoutViewIsOnLastPageFeedback.BoolValue,
+					CanSwapContentWithThumbnail = CanSwapContentWithThumbnailFeedback.BoolValue,
+					ContentSwappedWithThumbnail = ContentSwappedWithThumbnailFeedback.BoolValue,
+				});
+			}
+		}
 
 		public void GetAvailableLayouts()
 		{
@@ -2848,10 +2861,12 @@ Cameras = new List<IHasCameraControls>();
 			int videoLayoutStyle;
 			switch (layoutStyle)
 			{
-				case zConfiguration.eLayoutStyle.Gallery:  videoLayoutStyle = 1; break; // VideoLayoutStyleGallery
-				case zConfiguration.eLayoutStyle.Speaker:  videoLayoutStyle = 2; break; // VideoLayoutStyleSpeaker
-				case zConfiguration.eLayoutStyle.Strip:    videoLayoutStyle = 3; break; // VideoLayoutStyleThumbnail
-				case zConfiguration.eLayoutStyle.ShareAll: videoLayoutStyle = 4; break; // VideoLayoutStyleContentOnly
+				case zConfiguration.eLayoutStyle.Gallery: videoLayoutStyle = 1; break; // VideoLayoutStyleGallery
+				case zConfiguration.eLayoutStyle.Speaker: videoLayoutStyle = 2; break; // VideoLayoutStyleSpeaker
+				case zConfiguration.eLayoutStyle.Thumbnail: videoLayoutStyle = 3; break; // VideoLayoutStyleThumbnail
+				case zConfiguration.eLayoutStyle.ContentOnly: videoLayoutStyle = 4; break; // VideoLayoutStyleContentOnly
+				case zConfiguration.eLayoutStyle.CancelContentOnly: videoLayoutStyle = 5; break; // VideoLayoutStyleCancelContentOnly
+				case zConfiguration.eLayoutStyle.Dynamic: videoLayoutStyle = 6; break; // VideoLayoutStyleDynamic
 				default:
 					this.LogWarning("SetLayout: no SDK VideoLayoutStyle mapping for {LayoutStyle}", layoutStyle);
 					return;
@@ -2888,9 +2903,12 @@ Cameras = new List<IHasCameraControls>();
 			// Configuration.Call.Layout.Style is never populated (JSON pipeline removed).
 			// Track the last layout explicitly set via SetLayout(); default None means
 			// the next LocalLayoutToggle() starts from the beginning of the cycle.
-			get { return () => LastSelectedLayout == zConfiguration.eLayoutStyle.None
-			                       ? string.Empty
-			                       : LastSelectedLayout.ToString(); }
+			get
+			{
+				return () => LastSelectedLayout == zConfiguration.eLayoutStyle.None
+								   ? string.Empty
+								   : LastSelectedLayout.ToString();
+			}
 		}
 
 		public StringFeedback LocalLayoutFeedback { get; private set; }
@@ -2899,7 +2917,7 @@ Cameras = new List<IHasCameraControls>();
 		{
 			var currentLayout = LocalLayoutFeedback.StringValue;
 
-			var eCurrentLayout = (int) Enum.Parse(typeof (zConfiguration.eLayoutStyle), currentLayout, true);
+			var eCurrentLayout = (int)Enum.Parse(typeof(zConfiguration.eLayoutStyle), currentLayout, true);
 
 			var nextLayout = GetNextLayout(eCurrentLayout);
 
@@ -2921,25 +2939,19 @@ Cameras = new List<IHasCameraControls>();
 				return zConfiguration.eLayoutStyle.None;
 			}
 
-			zConfiguration.eLayoutStyle nextLayout;
+			// Enum values are sequential: Gallery=1, Speaker=2, Thumbnail=3, ContentOnly=4, CancelContentOnly=5, Dynamic=6
+			// Advance to the next value, wrapping from Dynamic back to Gallery
+			var next = currentLayout >= (int)zConfiguration.eLayoutStyle.Dynamic
+				? zConfiguration.eLayoutStyle.Gallery
+				: (zConfiguration.eLayoutStyle)(currentLayout + 1);
 
-			if (((zConfiguration.eLayoutStyle) currentLayout & zConfiguration.eLayoutStyle.ShareAll) ==
-			    zConfiguration.eLayoutStyle.ShareAll)
+			if ((AvailableLayouts & next) == next)
 			{
-				nextLayout = zConfiguration.eLayoutStyle.Gallery;
+				return next;
 			}
 			else
 			{
-				nextLayout = (zConfiguration.eLayoutStyle) (currentLayout << 1);
-			}
-
-			if ((AvailableLayouts & nextLayout) == nextLayout)
-			{
-				return nextLayout;
-			}
-			else
-			{
-				return GetNextLayout((int) nextLayout);
+				return GetNextLayout((int)next);
 			}
 		}
 
@@ -2964,243 +2976,243 @@ Cameras = new List<IHasCameraControls>();
 
 		#endregion
 
-        #region IPasswordPrompt Members
+		#region IPasswordPrompt Members
 
-        public event EventHandler<PasswordPromptEventArgs> PasswordRequired;
+		public event EventHandler<PasswordPromptEventArgs> PasswordRequired;
 
-        public void SubmitPassword(string password)
-        {
-            _meetingPasswordRequired = false;
-            this.LogDebug("Password Submitted: {Password}", password);
-            _controller.SendMeetingPassword(password);
-        }
+		public void SubmitPassword(string password)
+		{
+			_meetingPasswordRequired = false;
+			this.LogDebug("Password Submitted: {Password}", password);
+			_controller.SendMeetingPassword(password);
+		}
 
-        void OnPasswordRequired(bool lastAttemptIncorrect, bool loginFailed, bool loginCancelled, string message)
-        {
+		void OnPasswordRequired(bool lastAttemptIncorrect, bool loginFailed, bool loginCancelled, string message)
+		{
 			_meetingPasswordRequired = !loginFailed && !loginCancelled;
 
-            var handler = PasswordRequired;
-            if (handler != null)
-            {	            
+			var handler = PasswordRequired;
+			if (handler != null)
+			{
 				this.LogDebug("Meeting Password Required: {MeetingPasswordRequired}", _meetingPasswordRequired);
 
-	            handler(this, new PasswordPromptEventArgs(lastAttemptIncorrect, loginFailed, loginCancelled, message));
-            }
-        }
+				handler(this, new PasswordPromptEventArgs(lastAttemptIncorrect, loginFailed, loginCancelled, message));
+			}
+		}
 
-        #endregion
+		#endregion
 
-        #region IHasMeetingInfo Members
+		#region IHasMeetingInfo Members
 
-        public event EventHandler<MeetingInfoEventArgs> MeetingInfoChanged;
+		public event EventHandler<MeetingInfoEventArgs> MeetingInfoChanged;
 
-        private MeetingInfo _meetingInfo;
+		private MeetingInfo _meetingInfo;
 
-        public MeetingInfo MeetingInfo
-        {
-            get { return _meetingInfo; }
-            private set
-            {
-                if (value != _meetingInfo)
-                {
-                    _meetingInfo = value;
+		public MeetingInfo MeetingInfo
+		{
+			get { return _meetingInfo; }
+			private set
+			{
+				if (value != _meetingInfo)
+				{
+					_meetingInfo = value;
 
-                    var handler = MeetingInfoChanged;
-                    if (handler != null)
-                    {
-                        handler(this, new MeetingInfoEventArgs(_meetingInfo));
-                    }
-                }
-            }
-        }
+					var handler = MeetingInfoChanged;
+					if (handler != null)
+					{
+						handler(this, new MeetingInfoEventArgs(_meetingInfo));
+					}
+				}
+			}
+		}
 
-        #endregion
+		#endregion
 
-        /// <summary>
-        /// Builds a <see cref="MeetingInfo"/> from the current SDK state and assigns it,
-        /// firing <see cref="MeetingInfoChanged"/> if the value has changed.
-        /// Field-compares against the last value before allocating so that callers who invoke
-        /// this on every small state transition don't generate spurious bridge/MC pushes (#33).
-        /// </summary>
-        private void UpdateMeetingInfo()
-        {
-            // Compare constituent fields before allocating; MeetingInfo is a class (ref type) so
-            // value != _meetingInfo is always true for a freshly constructed object.
-            var cur = _meetingInfo;
-            var isSharing = _sdkSharingState > 0;
-            if (cur != null
-                && cur.Id           == _currentMeetingId
-                && cur.Name         == _currentMeetingName
-                && cur.IsHost       == _sdkIsHost
-                && cur.IsSharingMeeting == isSharing
-                && cur.IsLocked     == _sdkMeetingLocked
-                && cur.IsRecording  == _sdkIsRecording
-                && cur.CanRecord    == _sdkCanRecord)
-            {
-                return; // no field changed — skip allocation and event
-            }
+		/// <summary>
+		/// Builds a <see cref="MeetingInfo"/> from the current SDK state and assigns it,
+		/// firing <see cref="MeetingInfoChanged"/> if the value has changed.
+		/// Field-compares against the last value before allocating so that callers who invoke
+		/// this on every small state transition don't generate spurious bridge/MC pushes (#33).
+		/// </summary>
+		private void UpdateMeetingInfo()
+		{
+			// Compare constituent fields before allocating; MeetingInfo is a class (ref type) so
+			// value != _meetingInfo is always true for a freshly constructed object.
+			var cur = _meetingInfo;
+			var isSharing = _sdkSharingState > 0;
+			if (cur != null
+				&& cur.Id == _currentMeetingId
+				&& cur.Name == _currentMeetingName
+				&& cur.IsHost == _sdkIsHost
+				&& cur.IsSharingMeeting == isSharing
+				&& cur.IsLocked == _sdkMeetingLocked
+				&& cur.IsRecording == _sdkIsRecording
+				&& cur.CanRecord == _sdkCanRecord)
+			{
+				return; // no field changed — skip allocation and event
+			}
 
-            MeetingInfo = new MeetingInfo(
-                _currentMeetingId,
-                _currentMeetingName,
-                string.Empty, // host name: SDK gap — ZrcSdk does not surface a host-name event
-                string.Empty,
-                "None",
-                _sdkIsHost,
-                isSharing,
-                false,
-                _sdkMeetingLocked,
-                _sdkIsRecording,
-                _sdkCanRecord);
-        }
+			MeetingInfo = new MeetingInfo(
+				_currentMeetingId,
+				_currentMeetingName,
+				string.Empty, // host name: SDK gap — ZrcSdk does not surface a host-name event
+				string.Empty,
+				"None",
+				_sdkIsHost,
+				isSharing,
+				false,
+				_sdkMeetingLocked,
+				_sdkIsRecording,
+				_sdkCanRecord);
+		}
 
-	    #region Implementation of IHasPresentationOnlyMeeting
+		#region Implementation of IHasPresentationOnlyMeeting
 
-	    public void StartSharingOnlyMeeting()
-	    {
-	        StartSharingOnlyMeeting(eSharingMeetingMode.None, 30, String.Empty);
-	    }
+		public void StartSharingOnlyMeeting()
+		{
+			StartSharingOnlyMeeting(eSharingMeetingMode.None, 30, String.Empty);
+		}
 
-	    public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode)
-	    {
-	        StartSharingOnlyMeeting(displayMode, DefaultMeetingDurationMin, String.Empty);
-	    }
+		public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode)
+		{
+			StartSharingOnlyMeeting(displayMode, DefaultMeetingDurationMin, String.Empty);
+		}
 
-	    public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration)
-	    {
-	        StartSharingOnlyMeeting(displayMode, duration, String.Empty);
-	    }
+		public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration)
+		{
+			StartSharingOnlyMeeting(displayMode, duration, String.Empty);
+		}
 
-	    public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration, string password)
-	    {
-            // Launches a sharing-only ("local presentation") meeting. NOTE: the SDK treats displayMode
-            // as the LaunchSharingMeeting "init display state" only — on 4-series firmware the overlay
-            // always opens on Desktop regardless. To switch the live instruction (Desktop/iPhone-iPad),
-            // call ShowShareInstruction(mode) once the meeting is up. duration/password have no SDK
-            // equivalent and are ignored.
-            if (duration != 0 || !string.IsNullOrEmpty(password))
-                this.LogDebug("StartSharingOnlyMeeting: duration/password are not supported by the SDK and are ignored");
-            _controller.LaunchSharingMeeting(true, SharingModeToSdk(displayMode));
-	    }
+		public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration, string password)
+		{
+			// Launches a sharing-only ("local presentation") meeting. NOTE: the SDK treats displayMode
+			// as the LaunchSharingMeeting "init display state" only — on 4-series firmware the overlay
+			// always opens on Desktop regardless. To switch the live instruction (Desktop/iPhone-iPad),
+			// call ShowShareInstruction(mode) once the meeting is up. duration/password have no SDK
+			// equivalent and are ignored.
+			if (duration != 0 || !string.IsNullOrEmpty(password))
+				this.LogDebug("StartSharingOnlyMeeting: duration/password are not supported by the SDK and are ignored");
+			_controller.LaunchSharingMeeting(true, SharingModeToSdk(displayMode));
+		}
 
-	    public void StartNormalMeetingFromSharingOnlyMeeting()
-	    {
-            _controller.SwitchFromLocalPresentationToNormalMeeting();
-	    }
+		public void StartNormalMeetingFromSharingOnlyMeeting()
+		{
+			_controller.SwitchFromLocalPresentationToNormalMeeting();
+		}
 
-	    /// <summary>
-	    /// Shows the sharing-instruction overlay for the given mode on the room screen
-	    /// (Laptop → Desktop tab, Ios → iPhone/iPad tab). Use this to switch the displayed
-	    /// instruction while in a sharing-only meeting — the SDK's <c>LaunchSharingMeeting</c>
-	    /// "init display state" does not change the live overlay (it always opens Desktop), so
-	    /// <c>ShowSharingInstruction</c> is the call that actually selects the tab.
-	    /// </summary>
-	    public void ShowShareInstruction(eSharingMeetingMode mode)
-	    {
-            _controller.ShowSharingInstruction(true, SharingModeToSdk(mode));
-	    }
+		/// <summary>
+		/// Shows the sharing-instruction overlay for the given mode on the room screen
+		/// (Laptop → Desktop tab, Ios → iPhone/iPad tab). Use this to switch the displayed
+		/// instruction while in a sharing-only meeting — the SDK's <c>LaunchSharingMeeting</c>
+		/// "init display state" does not change the live overlay (it always opens Desktop), so
+		/// <c>ShowSharingInstruction</c> is the call that actually selects the tab.
+		/// </summary>
+		public void ShowShareInstruction(eSharingMeetingMode mode)
+		{
+			_controller.ShowSharingInstruction(true, SharingModeToSdk(mode));
+		}
 
-	    /// <summary>Dismisses the sharing-instruction overlay on the room screen.</summary>
-	    public void DismissShareInstruction()
-	    {
-            _controller.ShowSharingInstruction(false, 0);
-	    }
+		/// <summary>Dismisses the sharing-instruction overlay on the room screen.</summary>
+		public void DismissShareInstruction()
+		{
+			_controller.ShowSharingInstruction(false, 0);
+		}
 
-	    // Maps Essentials eSharingMeetingMode -> ZRC SDK SharingInstructionDisplayState int.
-	    private static int SharingModeToSdk(eSharingMeetingMode mode)
-	    {
-	        switch (mode)
-	        {
-	            case eSharingMeetingMode.Laptop: return 1; // SharingInstructionDisplayStateDesktop
-	            case eSharingMeetingMode.Ios:    return 2; // SharingInstructionDisplayStateIOS
-	            default:                         return 0; // None
-	        }
-	    }
+		// Maps Essentials eSharingMeetingMode -> ZRC SDK SharingInstructionDisplayState int.
+		private static int SharingModeToSdk(eSharingMeetingMode mode)
+		{
+			switch (mode)
+			{
+				case eSharingMeetingMode.Laptop: return 1; // SharingInstructionDisplayStateDesktop
+				case eSharingMeetingMode.Ios: return 2; // SharingInstructionDisplayStateIOS
+				default: return 0; // None
+			}
+		}
 
-	    #endregion
+		#endregion
 
-        #region IHasMeetingLock Members
+		#region IHasMeetingLock Members
 
-        public BoolFeedback MeetingIsLockedFeedback { get; private set; }
+		public BoolFeedback MeetingIsLockedFeedback { get; private set; }
 
-        public void LockMeeting()
-        {
-            _controller.LockMeeting(true);
-        }
+		public void LockMeeting()
+		{
+			_controller.LockMeeting(true);
+		}
 
-        public void UnLockMeeting()
-        {
-            _controller.LockMeeting(false);
-        }
+		public void UnLockMeeting()
+		{
+			_controller.LockMeeting(false);
+		}
 
-        public void ToggleMeetingLock()
-        {
-            if (MeetingIsLockedFeedback.BoolValue)
-            {
-                UnLockMeeting();
-            }
-            else
-            {
-                LockMeeting();
-            }
-        }
+		public void ToggleMeetingLock()
+		{
+			if (MeetingIsLockedFeedback.BoolValue)
+			{
+				UnLockMeeting();
+			}
+			else
+			{
+				LockMeeting();
+			}
+		}
 
-        #endregion
+		#endregion
 
-        #region IHasMeetingRecordingWithPrompt Members
+		#region IHasMeetingRecordingWithPrompt Members
 
-        public BoolFeedback MeetingIsRecordingFeedback { get; private set; }
+		public BoolFeedback MeetingIsRecordingFeedback { get; private set; }
 
-        bool _recordConsentPromptIsVisible;
+		bool _recordConsentPromptIsVisible;
 
-        public BoolFeedback RecordConsentPromptIsVisible { get; private set; }
+		public BoolFeedback RecordConsentPromptIsVisible { get; private set; }
 
-        public void RecordingPromptAcknowledgement(bool agree)
-        {
-            _recordConsentPromptIsVisible = false;
-            RecordConsentPromptIsVisible.FireUpdate();
-            _controller.ResponseToRecordingRequest(agree);
-        }
+		public void RecordingPromptAcknowledgement(bool agree)
+		{
+			_recordConsentPromptIsVisible = false;
+			RecordConsentPromptIsVisible.FireUpdate();
+			_controller.ResponseToRecordingRequest(agree);
+		}
 
-        public void StartRecording()
-        {
-            _controller.StartRecording();
-        }
+		public void StartRecording()
+		{
+			_controller.StartRecording();
+		}
 
-        public void StopRecording()
-        {
-            _controller.StopRecording();
-        }
+		public void StopRecording()
+		{
+			_controller.StopRecording();
+		}
 
-        public void ToggleRecording()
-        {
-            if (MeetingIsRecordingFeedback.BoolValue)
-            {
-                StopRecording();
-            }
-            else
-            {
-                StartRecording();
-            }
-        }
+		public void ToggleRecording()
+		{
+			if (MeetingIsRecordingFeedback.BoolValue)
+			{
+				StopRecording();
+			}
+			else
+			{
+				StartRecording();
+			}
+		}
 
-        #endregion
+		#endregion
 
-        #region IZoomWirelessShareInstructions Members
+		#region IZoomWirelessShareInstructions Members
 
-        public event EventHandler<ShareInfoEventArgs> ShareInfoChanged;
+		public event EventHandler<ShareInfoEventArgs> ShareInfoChanged;
 
-        public zStatus.Sharing SharingState
-        {
-            get
-            {
-                return Status.Sharing;
-            }
-        }
+		public zStatus.Sharing SharingState
+		{
+			get
+			{
+				return Status.Sharing;
+			}
+		}
 
-        void OnShareInfoChanged(zStatus.Sharing status)
-        {
-            this.LogDebug(
+		void OnShareInfoChanged(zStatus.Sharing status)
+		{
+			this.LogDebug(
 @"ShareInfoChanged:
 isSharingHDMI: {IsSharingHDMI}
 isSharingAirplay: {IsSharingAirplay}
@@ -3212,13 +3224,13 @@ status.isAirHostClientConnected,
 status.password,
 status.dispState);
 
-            var handler = ShareInfoChanged;
-            if (handler != null)
-            {
-                handler(this, new ShareInfoEventArgs(status));
-            }
-        }
+			var handler = ShareInfoChanged;
+			if (handler != null)
+			{
+				handler(this, new ShareInfoEventArgs(status));
+			}
+		}
 
-        #endregion
-    }
+		#endregion
+	}
 }

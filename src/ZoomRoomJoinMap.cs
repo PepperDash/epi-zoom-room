@@ -286,7 +286,7 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "Digital: FB layout 'Strip' is available; Serial: layout name string",
+				Description = "Digital: FB layout 'Thumbnail' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});
@@ -300,7 +300,35 @@ namespace PepperDash.Essentials.Plugins
 			},
 			new JoinMetadata
 			{
-				Description = "Digital: FB layout 'ShareAll' is available; Serial: layout name string",
+				Description = "Digital: FB layout 'ContentOnly' is available; Serial: layout name string",
+				JoinCapabilities = eJoinCapabilities.ToSIMPL,
+				JoinType = eJoinType.DigitalSerial
+			});
+
+		[JoinName("LayoutCancelContentOnlyIsAvailable")]
+		public JoinDataComplete LayoutCancelContentOnlyIsAvailable = new JoinDataComplete(
+			new JoinData
+			{
+				JoinNumber = 225,
+				JoinSpan = 1
+			},
+			new JoinMetadata
+			{
+				Description = "Digital: FB layout 'CancelContentOnly' is available; Serial: layout name string",
+				JoinCapabilities = eJoinCapabilities.ToSIMPL,
+				JoinType = eJoinType.DigitalSerial
+			});
+
+		[JoinName("LayoutDynamicIsAvailable")]
+		public JoinDataComplete LayoutDynamicIsAvailable = new JoinDataComplete(
+			new JoinData
+			{
+				JoinNumber = 226,
+				JoinSpan = 1
+			},
+			new JoinMetadata
+			{
+				Description = "Digital: FB layout 'Dynamic' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
 			});		

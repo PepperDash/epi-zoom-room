@@ -62,8 +62,11 @@ namespace PepperDash.Essentials.Plugins
             None = 0,
             Gallery = 1,
             Speaker = 2,
-            Strip = 4,
-            ShareAll = 8,
+            Thumbnail = 3,
+
+            ContentOnly = 4,
+            CancelContentOnly = 5,
+            Dynamic = 6,
         }
 
         public enum eLayoutSize
