@@ -27,14 +27,9 @@ namespace PepperDash.Essentials.AppServer.Messengers
             AddAction("/cameraAutoModeOn", (id, content) => _codec.CameraAutoModeOn());
             AddAction("/cameraAutoModeOff", (id, content) => _codec.CameraAutoModeOff());
             AddAction("/cameraAutoModeToggle", (id, content) => _codec.CameraAutoModeToggle());
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.CameraAutoModeIsOnFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new CameraAutoModeStateMessage { CameraAutoModeIsOn = e.BoolValue }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

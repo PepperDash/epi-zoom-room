@@ -59,12 +59,8 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 if (i != null) _codec.RemoveParticipant(i.Value);
             });
             AddAction("/removeAllFromWaitingRoom", (id, content) => _codec.RemoveAllFromWaitingRoom());
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.Participants.ParticipantsListHasChanged += (s, e) => ScheduleRosterPost();
-            return base.CustomActivate();
         }
 
         // Stop any pending timer and start a fresh 250 ms window. Only the final fire posts.

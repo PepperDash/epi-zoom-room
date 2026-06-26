@@ -47,13 +47,9 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 var cmd = FindOption(s?.Value);
                 if (cmd != null) ExecuteSet(cmd);
             });
-        }
 
-        protected override bool CustomActivate()
-        {
             GetFeedback().OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(BuildChangedStatus(e.StringValue)));
-            return base.CustomActivate();
         }
 
         protected CodecCommandWithLabel FindOption(string value)

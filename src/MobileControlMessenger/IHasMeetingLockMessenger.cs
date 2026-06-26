@@ -27,14 +27,9 @@ namespace PepperDash.Essentials.AppServer.Messengers
             AddAction("/lockMeeting", (id, content) => _codec.LockMeeting());
             AddAction("/unlockMeeting", (id, content) => _codec.UnLockMeeting());
             AddAction("/toggleMeetingLock", (id, content) => _codec.ToggleMeetingLock());
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.MeetingIsLockedFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new MeetingLockStateMessage { MeetingIsLocked = e.BoolValue }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

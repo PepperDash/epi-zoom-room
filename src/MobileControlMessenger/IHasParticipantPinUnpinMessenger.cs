@@ -41,14 +41,9 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 var c = content?.ToObject<ParticipantPinContent>();
                 if (c != null) _codec.ToggleParticipantPinState(c.UserId, c.ScreenIndex);
             });
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.NumberOfScreensFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new ParticipantPinStateMessage { NumberOfScreens = e.IntValue }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

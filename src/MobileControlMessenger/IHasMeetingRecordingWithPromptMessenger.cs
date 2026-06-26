@@ -34,16 +34,11 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 var b = content?.ToObject<MobileControlSimpleContent<bool>>();
                 if (b != null) _codec.RecordingPromptAcknowledgement(b.Value);
             });
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.MeetingIsRecordingFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new MeetingRecordingStateMessage { IsRecording = e.BoolValue }));
             _codec.RecordConsentPromptIsVisible.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new MeetingRecordingStateMessage { RecordConsentPromptIsVisible = e.BoolValue }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

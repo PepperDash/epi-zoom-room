@@ -47,14 +47,9 @@ namespace PepperDash.Essentials.AppServer.Messengers
             AddAction("/participantsNextPage", (id, content) => _codec.LayoutTurnNextPage());
             AddAction("/participantsPreviousPage", (id, content) => _codec.LayoutTurnPreviousPage());
             AddAction("/swapContentWithThumbnail", (id, content) => _codec.SwapContentWithThumbnail());
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.LayoutInfoChanged += (s, e) =>
                 Task.Run(() => PostStatusMessage(new ZoomRoomLayoutsStateMessage { Layouts = BuildLayoutState() }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

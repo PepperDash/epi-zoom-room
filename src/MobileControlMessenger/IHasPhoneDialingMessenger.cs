@@ -37,18 +37,13 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 var s = content?.ToObject<MobileControlSimpleContent<string>>();
                 if (!string.IsNullOrEmpty(s?.Value)) _codec.SendDtmfToPhone(s.Value);
             });
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.PhoneOffHookFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new PhoneDialingStateMessage { PhoneOffHook = e.BoolValue }));
             _codec.CallerIdNameFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new PhoneDialingStateMessage { CallerIdName = e.StringValue }));
             _codec.CallerIdNumberFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new PhoneDialingStateMessage { CallerIdNumber = e.StringValue }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

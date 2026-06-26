@@ -24,14 +24,9 @@ namespace PepperDash.Essentials.AppServer.Messengers
             base.RegisterActions();
 
             AddAction("/fullStatus", (id, content) => SendFullStatus(id));
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.ShareInfoChanged += (s, e) =>
                 Task.Run(() => PostStatusMessage(new ShareInfoStateMessage { ShareInfo = e.SharingStatus }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string id = null) =>

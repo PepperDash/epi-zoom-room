@@ -78,17 +78,12 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 if (string.IsNullOrEmpty(c.Password)) _codec.Dial(c.MeetingNumber);
                 else _codec.Dial(c.MeetingNumber, c.Password);
             });
-        }
 
-        protected override bool CustomActivate()
-        {
             _codec.CameraIsMutedFeedback.OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(new ZoomRoomStateMessage { CameraIsMuted = e.BoolValue }));
 
             _codec.VideoUnmuteRequested += (s, e) =>
                 Task.Run(() => PostEventMessage(new ZoomRoomEventMessage { EventType = "videoUnmuteRequested" }));
-
-            return base.CustomActivate();
         }
 
         private void SendFullStatus(string clientId = null)
