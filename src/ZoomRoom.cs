@@ -1598,7 +1598,7 @@ namespace PepperDash.Essentials.Plugins
 		/// <summary>
 		/// Dials a meeting with a password
 		/// </summary>
-		public void Dial(string number, string password)
+		public override void Dial(string number, string password)
 		{
 			this.LogDebug("Dialing meeting number: {Number} with password: {Password}", number, password);
 			_controller.JoinMeetingWithPassword(number, password);
