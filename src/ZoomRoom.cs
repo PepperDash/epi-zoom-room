@@ -66,6 +66,8 @@ namespace PepperDash.Essentials.Plugins
 		private bool _layoutIsOnLastPage;
 		private int _currentPageVideoType; // PageVideoType (0 = GalleryView)
 		private bool _contentSwappedWithThumbnail;
+		// Screen layout status, driven by the SDK's ScreenLayoutStatus notification.
+		private ScreenLayoutStatusEventArgs _screenLayoutStatus;
 		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
 		private ushort _sdkSpeakerVolumeLevel;
 		private bool _sdkSpeakerMuted;
@@ -684,6 +686,7 @@ namespace PepperDash.Essentials.Plugins
 			_controller.SharingStatusChanged += OnControllerSharingStatusChanged;
 			_controller.AirPlayStatusChanged += OnControllerAirPlayStatusChanged;
 			_controller.VideoPageStatusChanged += OnControllerVideoPageStatusChanged;
+			_controller.ScreenLayoutStatusChanged += OnControllerScreenLayoutStatusChanged;
 			_controller.SipCallStatusChanged += OnControllerSipCallStatusChanged;
 			_controller.ContactListChanged += OnControllerContactListChanged;
 			_controller.MeetingListChanged += OnControllerMeetingListChanged;
@@ -1065,6 +1068,76 @@ namespace PepperDash.Essentials.Plugins
 			_currentPageVideoType = e.PageVideoType; // keep the SDK's current page type for TurnVideoPage
 			LayoutViewIsOnFirstPageFeedback.FireUpdate();
 			LayoutViewIsOnLastPageFeedback.FireUpdate();
+		}
+
+		private void OnControllerScreenLayoutStatusChanged(object sender, ScreenLayoutStatusEventArgs e)
+		{
+			_screenLayoutStatus = e;
+
+			// Update the current layout from the first screen's active layout source type.
+			if (e.LayoutInfos != null && e.LayoutInfos.Length > 0)
+			{
+				var primaryScreen = e.LayoutInfos[0];
+				LastSelectedLayout = MapScreenLayoutSourceTypeToLayoutStyle(primaryScreen.Layout);
+				LocalLayoutFeedback.FireUpdate();
+
+				// Compute available layouts from the ctrlInfos (enabled entries).
+				ComputeAvailableLayoutsFromScreenStatus(primaryScreen);
+			}
+
+			// Update content swap state from the SDK booleans.
+			_contentSwappedWithThumbnail = e.IsInFloatingShareContent;
+			ContentSwappedWithThumbnailFeedback.FireUpdate();
+			CanSwapContentWithThumbnailFeedback.FireUpdate();
+
+			ScreenLayoutStatusChanged?.Invoke(this, e);
+			OnLayoutInfoChanged();
+		}
+
+		/// <summary>
+		/// Maps SDK ScreenLayoutSourceType int to the Essentials eLayoutStyle enum.
+		/// </summary>
+		private static zConfiguration.eLayoutStyle MapScreenLayoutSourceTypeToLayoutStyle(int screenLayoutSourceType)
+		{
+			// ScreenLayoutSourceType: None=-1, ActiveVideo=0, SelfVideo=1, PinnedVideo=2,
+			// Spotlight=3, Gallery=4, SharedContent=5, Background=6, LocalView=7,
+			// ImmersiveView=8, ZoomAppsView=9, DynamicView=10, ThumbnailView=11, ThumbnailShareView=12
+			return screenLayoutSourceType switch
+			{
+				0 => zConfiguration.eLayoutStyle.Speaker,    // ActiveVideo = speaker/active-speaker view
+				3 => zConfiguration.eLayoutStyle.Speaker,    // Spotlight = speaker variant
+				4 => zConfiguration.eLayoutStyle.Gallery,    // Gallery
+				5 => zConfiguration.eLayoutStyle.ContentOnly, // SharedContent = content-only
+				10 => zConfiguration.eLayoutStyle.Dynamic,   // DynamicView
+				11 => zConfiguration.eLayoutStyle.Thumbnail, // ThumbnailView
+				12 => zConfiguration.eLayoutStyle.Thumbnail, // ThumbnailShareView
+				_ => zConfiguration.eLayoutStyle.None,
+			};
+		}
+
+		/// <summary>
+		/// Computes AvailableLayouts from the SDK's ScreenLayoutCtrlInfo entries for the primary screen.
+		/// </summary>
+		private void ComputeAvailableLayoutsFromScreenStatus(ScreenLayoutInfoEventArgs screenInfo)
+		{
+			if (screenInfo.LayoutCtrlInfos == null || screenInfo.LayoutCtrlInfos.Length == 0)
+				return; // keep previous available layouts if no ctrl info provided
+
+			var available = zConfiguration.eLayoutStyle.None;
+			foreach (var ctrl in screenInfo.LayoutCtrlInfos)
+			{
+				if (!ctrl.Enable) continue;
+				var mapped = MapScreenLayoutSourceTypeToLayoutStyle(ctrl.Layout);
+				if (mapped != zConfiguration.eLayoutStyle.None)
+					available |= mapped;
+			}
+
+			// Always include CancelContentOnly if ContentOnly is available (it's the toggle-off action).
+			if (available.HasFlag(zConfiguration.eLayoutStyle.ContentOnly))
+				available |= zConfiguration.eLayoutStyle.CancelContentOnly;
+
+			if (available != zConfiguration.eLayoutStyle.None)
+				AvailableLayouts = available;
 		}
 
 		private void OnControllerSipCallStatusChanged(object sender, SIPCall e)
@@ -2778,10 +2851,9 @@ namespace PepperDash.Essentials.Plugins
 
 		private Func<bool> CanSwapContentWithThumbnailFeedbackFunc
 		{
-			// Status.Layout.can_Switch_Floating_Share_Content is never populated (JSON pipeline removed).
-			// SwitchToFloatingShareForSingleScreen is only meaningful when content is being shared;
-			// use the SDK sharing state as the availability proxy.
-			get { return () => _sdkSharingState != 0; }
+			// Use the SDK's ScreenLayoutStatus.CanSwitchFloatingShareContent when available;
+			// fall back to sharing state as a proxy if the notification hasn't arrived yet.
+			get { return () => _screenLayoutStatus?.CanSwitchFloatingShareContent ?? _sdkSharingState != 0; }
 		}
 
 		private Func<bool> ContentSwappedWithThumbnailFeedbackFunc
@@ -2797,27 +2869,38 @@ namespace PepperDash.Essentials.Plugins
 
 		public BoolFeedback ContentSwappedWithThumbnailFeedback { get; private set; }
 
+		/// <summary>Fires when the SDK reports an updated ScreenLayoutStatus.</summary>
+		public event EventHandler<ScreenLayoutStatusEventArgs> ScreenLayoutStatusChanged;
+
+		/// <summary>Last ScreenLayoutStatus received from the SDK. Null until the first notification.</summary>
+		public ScreenLayoutStatusEventArgs ScreenLayoutStatus => _screenLayoutStatus;
+
 
 		public zConfiguration.eLayoutStyle LastSelectedLayout { get; private set; }
 
 		public zConfiguration.eLayoutStyle AvailableLayouts { get; private set; }
 
 		/// <summary>
-		/// Reads individual properties to determine if which layouts are avalailable
+		/// Determines available layouts from SDK ScreenLayoutStatus when available,
+		/// otherwise falls back to reporting all layouts as available.
 		/// </summary>
 		private void ComputeAvailableLayouts()
 		{
-			this.LogInformation("Computing available layouts...");
-			// The JSON-over-SSH pipeline that fed Status.Layout is removed; the ZRC SDK has no
-			// per-room layout-capability query. Zoom Rooms universally support all layout
-			// styles, so report them all as available. Revisit if the SDK gains a capability API.
+			if (_screenLayoutStatus?.LayoutInfos != null && _screenLayoutStatus.LayoutInfos.Length > 0)
+			{
+				ComputeAvailableLayoutsFromScreenStatus(_screenLayoutStatus.LayoutInfos[0]);
+				this.LogInformation("availablelayouts: {AvailableLayouts} (from SDK ScreenLayoutStatus)", AvailableLayouts);
+				return;
+			}
+
+			// Fallback: no ScreenLayoutStatus received yet. Report all layouts as available.
 			AvailableLayouts = zConfiguration.eLayoutStyle.Gallery
 							 | zConfiguration.eLayoutStyle.Speaker
 							 | zConfiguration.eLayoutStyle.Thumbnail
 							 | zConfiguration.eLayoutStyle.ContentOnly
 							 | zConfiguration.eLayoutStyle.CancelContentOnly
 							 | zConfiguration.eLayoutStyle.Dynamic;
-			this.LogInformation("availablelayouts: {AvailableLayouts} (static — SDK has no capability query)", AvailableLayouts);
+			this.LogInformation("availablelayouts: {AvailableLayouts} (static fallback — no SDK data yet)", AvailableLayouts);
 		}
 
 		private void OnLayoutInfoChanged()
@@ -2825,7 +2908,6 @@ namespace PepperDash.Essentials.Plugins
 			var handler = LayoutInfoChanged;
 			if (handler != null)
 			{
-
 				var currentLayout = zConfiguration.eLayoutStyle.None;
 
 				currentLayout = (zConfiguration.eLayoutStyle)Enum.Parse(typeof(zConfiguration.eLayoutStyle), string.IsNullOrEmpty(LocalLayoutFeedback.StringValue) ? "None" : LocalLayoutFeedback.StringValue, true);

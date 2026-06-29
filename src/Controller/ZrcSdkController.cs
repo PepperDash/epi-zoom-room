@@ -275,6 +275,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.SharingStatusChanged    += (s, e) => SafeRaise(() => SharingStatusChanged?.Invoke(this, e));
             _sdk.AirPlayStatusChanged    += (s, e) => SafeRaise(() => AirPlayStatusChanged?.Invoke(this, e));
             _sdk.VideoPageStatusChanged  += (s, e) => SafeRaise(() => VideoPageStatusChanged?.Invoke(this, e));
+            _sdk.ScreenLayoutStatusChanged += (s, e) => SafeRaise(() => ScreenLayoutStatusChanged?.Invoke(this, e));
             _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
             _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
             _sdk.ContactListChanged      += (s, e) => SafeRaise(() => ContactListChanged?.Invoke(this, e));
@@ -509,6 +510,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SharingStatusEventArgs> SharingStatusChanged;
         public event EventHandler<AirPlayStatusEventArgs> AirPlayStatusChanged;
         public event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
+        public event EventHandler<ScreenLayoutStatusEventArgs> ScreenLayoutStatusChanged;
         public event EventHandler<SIPCall> SipCallStatusChanged;
         public event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
         public event EventHandler<ContactListEventArgs> ContactListChanged;
