@@ -121,9 +121,21 @@ namespace PepperDash.Essentials.Plugins
 				eRoutingSignalType.Audio | eRoutingSignalType.Video,
 				eRoutingPortConnectionType.Hdmi, new Action(StopSharing), this);
 
-			Input1 = new RoutingInputPort(RoutingPortNames.HdmiIn1,
+			ContentInput1 = new RoutingInputPort(RoutingPortNames.HdmiIn1,
 				eRoutingSignalType.Audio | eRoutingSignalType.Video,
 				eRoutingPortConnectionType.Hdmi, null, this);
+
+			CamInput1 = new RoutingInputPort("usbIn1",
+				eRoutingSignalType.Video, eRoutingPortConnectionType.UsbC, null, this);
+
+			CamInput2 = new RoutingInputPort("usbIn2",
+				eRoutingSignalType.Video, eRoutingPortConnectionType.UsbC, null, this);
+
+			CamInput3 = new RoutingInputPort("usbIn3",
+				eRoutingSignalType.Video, eRoutingPortConnectionType.UsbC, null, this);
+
+			CamInput4 = new RoutingInputPort("usbIn4",
+				eRoutingSignalType.Video, eRoutingPortConnectionType.UsbC, null, this);
 
 			Output1 = new RoutingOutputPort(RoutingPortNames.HdmiOut1,
 				eRoutingSignalType.Audio | eRoutingSignalType.Video,
@@ -302,7 +314,18 @@ namespace PepperDash.Essentials.Plugins
 		public RoutingOutputPort Output2 { get; private set; }
 		public RoutingOutputPort Output3 { get; private set; }
 
-		public RoutingInputPort Input1 { get; private set; }
+		public RoutingInputPort ContentInput1 { get; private set; }
+
+
+		// There doesn't have to be 4 physical USB ports to support up to 4 USB cameras.  A single USB connection can carry multiple cameras.
+		public RoutingInputPort CamInput1 { get; private set; }
+
+		public RoutingInputPort CamInput2 { get; private set; }
+
+		public RoutingInputPort CamInput3 { get; private set; }
+
+		public RoutingInputPort CamInput4 { get; private set; }
+
 
 		#region ICommunicationMonitor Members
 
@@ -558,7 +581,11 @@ namespace PepperDash.Essentials.Plugins
 			// Set up input ports
 			CreateOsdSource();
 			InputPorts.Add(CodecOsdIn);
-			InputPorts.Add(Input1);
+			InputPorts.Add(ContentInput1);
+			InputPorts.Add(CamInput1);
+			InputPorts.Add(CamInput2);
+			InputPorts.Add(CamInput3);
+			InputPorts.Add(CamInput4);
 
 			// Set up output ports
 			OutputPorts.Add(Output1);
