@@ -19,6 +19,14 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Returns the current connection state (0=Established, 1=Connected, 2=Disconnected).</summary>
         int GetConnectionState();
 
+        /// <summary>
+        /// Synchronously queries the current meeting status. Unlike <see cref="MeetingStatusChanged"/>,
+        /// this does not require a status change to have occurred - call it once connected to pick up a
+        /// meeting that was already in progress before the SDK callbacks were registered.
+        /// </summary>
+        /// <returns>The current meeting status, or null if the query failed.</returns>
+        MeetingStatus? GetMeetingStatus();
+
         // ── Pairing ───────────────────────────────────────────────────────────
 
         bool PairWithActivationCode(string activationCode);

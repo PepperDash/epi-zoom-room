@@ -89,9 +89,18 @@ namespace PepperDash.Essentials.Plugins
 		private readonly Dictionary<string, ContactInfo> _directoryContactsById = new Dictionary<string, ContactInfo>();
 		// Pagination state for phonebook downloads. The ZRC SDK contact subscribe is range-based;
 		// each SubscribeContacts(start, count) only notifies for that window. We keep subscribing
-		// to successive windows until a batch comes back with fewer entries than the page size.
+		// to successive windows while a page comes back full (== PhonebookPageSize).
 		private const int PhonebookPageSize = 50;
 		private int _phonebookNextStart;
+		// The native SDK gives no reliable "this is definitely the last batch" signal for a directory
+		// fetch: both genuine paged responses and unrelated ambient IM/presence deltas can arrive as
+		// several progressively-larger batches for what is conceptually one fetch (observed in the
+		// field as e.g. 2, then 23, then 40 contacts trickling in). Rather than guessing completion from
+		// a single batch's size, debounce: only finalize/publish once no further ContactListChanged has
+		// arrived for PhonebookSettleMs (#contacts-pagination).
+		private CTimer _phonebookSettleTimer;
+		private readonly object _phonebookSettleLock = new object();
+		private const int PhonebookSettleMs = 1500;
 		private IHasCameraControls _selectedCamera;
 		private CodecDirectory _currentDirectoryResult;
 
@@ -767,11 +776,27 @@ namespace PepperDash.Essentials.Plugins
 				// Signal readiness: wires EISC camera joins (VideoCodecBase.LinkVideoCodecToApi)
 				// and unblocks MC /fullStatus (ZoomRoomMessenger.SendFullStatus gates on IsReady).
 				SetIsReady();
+
+				// Seed the current meeting status in case the Zoom Room was already in a meeting
+				// before this program (re)started and registered SDK callbacks. MeetingStatusChanged
+				// only fires on a subsequent *change* - without this, a meeting already in progress
+				// at connect time would never be reported.
+				var currentMeetingStatus = _controller.GetMeetingStatus();
+				if (currentMeetingStatus.HasValue)
+				{
+					this.LogInformation("Seeding current meeting status on connect: {Status}", currentMeetingStatus.Value);
+					ApplyMeetingStatus(currentMeetingStatus.Value);
+				}
+				else
+				{
+					this.LogWarning("Unable to query current meeting status on connect");
+				}
 			}
 			else if (!online)
 			{
 				StopBookingRefreshTimer();
 				ResetMeetingState();
+				lock (_phonebookSettleLock) _phonebookSettleTimer?.Stop();
 				lock (_directoryLock) _directoryContactsById.Clear();
 				PhonebookSyncState.CodecDisconnected();
 			}
@@ -795,6 +820,17 @@ namespace PepperDash.Essentials.Plugins
 			var status = (MeetingStatus)e.ErrorCode;
 			this.LogInformation("MeetingStatusChanged: {Status} ({Code})", status, e.ErrorCode);
 
+			ApplyMeetingStatus(status);
+		}
+
+		/// <summary>
+		/// Applies a meeting status to this device's call/meeting state. Shared by
+		/// <see cref="OnControllerMeetingStatusChanged"/> (an actual SDK status-changed event) and the
+		/// connect-time seed in <see cref="OnControllerConnectionStateChanged"/> (a synchronous query of
+		/// the status that may have already been in effect before the SDK callbacks were registered).
+		/// </summary>
+		private void ApplyMeetingStatus(MeetingStatus status)
+		{
 			switch (status)
 			{
 				case MeetingStatus.InMeeting:
@@ -1880,10 +1916,9 @@ namespace PepperDash.Essentials.Plugins
 			SendDtmfToPhone(s);
 		}
 
-		// Maps a batch of SDK contacts into the accumulated directory, rebuilds DirectoryRoot and
-		// publishes the result on the final page only. The subscription delivers contacts in pages;
-		// intermediate pages only update _directoryContactsById without triggering a full rebuild
-		// or MC push so the per-page overhead on large directories is minimal (#30).
+		// Kicks off the phonebook directory download. Results accumulate into _directoryContactsById
+		// via OnControllerContactListChanged and are rebuilt/published once the sync settles — see
+		// FinalizePhonebookSync (#30, #contacts-pagination).
 		private void StartPhonebookFetch()
 		{
 			_phonebookNextStart = 0;
@@ -1913,8 +1948,6 @@ namespace PepperDash.Essentials.Plugins
 		{
 			if (e == null || e.Contacts == null) return;
 
-			bool isLastPage = e.Contacts.Length < PhonebookPageSize;
-
 			lock (_directoryLock)
 			{
 				foreach (var c in e.Contacts)
@@ -1923,24 +1956,41 @@ namespace PepperDash.Essentials.Plugins
 					_directoryContactsById[c.ContactID] = c;
 				}
 
-				// Only rebuild DirectoryRoot and publish on the final page (#30).
-				// Intermediate pages update _directoryContactsById silently so the
-				// per-page LINQ rebuild + MC push doesn't compound with large directories.
-				if (!isLastPage)
+				// Only a genuine paged directory response (never an ambient IM/presence delta) can mean
+				// "there might be another page" — and only when it actually came back full. Requesting
+				// the next page here is still safe/idempotent even if this batch turns out to be the
+				// only one; finalization is entirely decided by the settle timer below.
+				if (e.Source == ContactListSource.DynamicListPage && e.Contacts.Length == PhonebookPageSize)
 				{
 					_phonebookNextStart += PhonebookPageSize;
-					this.LogDebug("Phonebook page complete ({BatchCount} contacts) — fetching next page at index {Start}",
+					this.LogDebug("Phonebook page full ({BatchCount} contacts) — fetching next page at index {Start}",
 						e.Contacts.Length, _phonebookNextStart);
 					_controller.SubscribeContacts(_phonebookNextStart, PhonebookPageSize, false);
-					return;
 				}
+			}
 
-				// Final page — build and publish.
+			// Debounce: (re)start the settle timer on every batch (paged or ambient). Only once no
+			// further ContactListChanged arrives for PhonebookSettleMs do we treat the accumulated
+			// cache as final and rebuild/publish — this is unaffected by how many intermediate
+			// batches arrived or what triggered them.
+			lock (_phonebookSettleLock)
+			{
+				_phonebookSettleTimer?.Stop();
+				_phonebookSettleTimer = new CTimer(_ => FinalizePhonebookSync(), PhonebookSettleMs);
+			}
+		}
+
+		// Rebuilds DirectoryRoot from the accumulated contact cache and publishes it, once the
+		// phonebook sync has settled (no ContactListChanged for PhonebookSettleMs).
+		private void FinalizePhonebookSync()
+		{
+			lock (_directoryLock)
+			{
 				var directory = new CodecDirectory { ResultsFolderId = "root" };
 				directory.AddContactsToDirectory(
 					_directoryContactsById.Values.Select(c => (DirectoryItem)MapDirectoryContact(c)).ToList());
 
-				this.LogDebug("Phonebook download complete: {Total} total contact(s)", directory.Contacts.Count);
+				this.LogDebug("Phonebook sync settled: {Total} total contact(s)", directory.Contacts.Count);
 
 				DirectoryRoot = directory;
 

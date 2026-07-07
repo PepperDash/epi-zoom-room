@@ -318,6 +318,8 @@ namespace PepperDash.Essentials.Plugins
 
         public int GetConnectionState() => _disposed ? 2 : _sdk.GetConnectionState();
 
+        public MeetingStatus? GetMeetingStatus() => _disposed ? null : _sdk.GetMeetingStatus();
+
         // ── Pairing ───────────────────────────────────────────────────────────
 
         public bool PairWithActivationCode(string activationCode) => _sdk.PairRoomWithActivationCode(activationCode);
