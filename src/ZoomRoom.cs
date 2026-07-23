@@ -126,10 +126,6 @@ namespace PepperDash.Essentials.Plugins
 
 			PhonebookSyncState = new CodecPhonebookSyncState(Key + "--PhonebookSync");
 
-			CodecOsdIn = new RoutingInputPort(RoutingPortNames.CodecOsd,
-				eRoutingSignalType.Audio | eRoutingSignalType.Video,
-				eRoutingPortConnectionType.Hdmi, new Action(StopSharing), this);
-
 			ContentInput1 = new RoutingInputPort(RoutingPortNames.HdmiIn1,
 				eRoutingSignalType.Audio | eRoutingSignalType.Video,
 				eRoutingPortConnectionType.Hdmi, null, this);
@@ -318,7 +314,6 @@ namespace PepperDash.Essentials.Plugins
 		}
 
 
-		public RoutingInputPort CodecOsdIn { get; private set; }
 		public RoutingOutputPort Output1 { get; private set; }
 		public RoutingOutputPort Output2 { get; private set; }
 		public RoutingOutputPort Output3 { get; private set; }
@@ -588,8 +583,6 @@ namespace PepperDash.Essentials.Plugins
 		private void SetUpRouting()
 		{
 			// Set up input ports
-			CreateOsdSource();
-			InputPorts.Add(CodecOsdIn);
 			InputPorts.Add(ContentInput1);
 			InputPorts.Add(CamInput1);
 			InputPorts.Add(CamInput2);
@@ -600,20 +593,6 @@ namespace PepperDash.Essentials.Plugins
 			OutputPorts.Add(Output1);
 			OutputPorts.Add(Output2);
 			OutputPorts.Add(Output3);
-		}
-
-		/// <summary>
-		/// Creates the fake OSD source, and connects it's AudioVideo output to the CodecOsdIn input
-		/// to enable routing 
-		/// </summary>
-		private void CreateOsdSource()
-		{
-			OsdSource = new DummyRoutingInputsDevice(Key + "[osd]");
-			DeviceManager.AddDevice(OsdSource);
-			var tl = new TieLine(OsdSource.AudioVideoOutputPort, CodecOsdIn);
-			TieLineCollection.Default.Add(tl);
-
-			//foreach(var input in Status.Video.
 		}
 
 		/// <summary>
