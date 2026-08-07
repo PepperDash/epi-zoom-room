@@ -1,6 +1,6 @@
 # Beincourt Customizations for epi-bic-zoomroom
 
-This is a fork of [PepperDash/epi-zoom-room](https://github.com/PepperDash/epi-zoom-room) maintained by [Beincourt Engineering](https://github.com/beincourt-engineering) for the Beincourt courtroom AV system (Pv2).
+This is a fork of [PepperDash/epi-zoom-room](https://github.com/PepperDash/epi-zoom-room) maintained by [Pepperdash Beincourt](https://github.com/pepperdash-beincourt) for the Beincourt courtroom AV system (Pv2).
 
 All Beincourt-specific customizations are isolated on the `csv-zoom-sandbox` branch to enable clean cherry-picking of upstream fixes while maintaining local enhancements.
 
@@ -33,14 +33,14 @@ public override void StartSharing() { StartSharingOnlyMeeting(); }
 **Impact**:
 - Zoom Room now launches a "sharing-only meeting" when starting content presentation
 - Content is shared with far-end participants instead of just displaying locally
-- Used by [epi-beincourt-room](https://github.com/beincourt-engineering/epi-beincourt-room) plugin during View All and Annotation presentation modes
+- Used by [epi-beincourt-room](https://github.com/pepperdash-beincourt/epi-beincourt-room) plugin during View All and Annotation presentation modes
 
 ---
 
 ## Branch Strategy
 
 - **`upstream`** (read-only reference): https://github.com/PepperDash/epi-zoom-room.git
-- **`fork`** (Beincourt fork): https://github.com/beincourt-engineering/epi-bic-zoomroom.git
+- **`fork`** (Beincourt fork): https://github.com/pepperdash-beincourt/epi-bic-zoomroom.git
 - **`main`**: Synced with upstream/main (stable)
 - **`feature/v3-migration`**: Upstream feature branch tracking
 - **`csv-zoom-sandbox`**: **All Beincourt customizations live here** ← Branch protection enforced
@@ -80,7 +80,7 @@ dotnet build -c Release
 - **Plugin**: `output/epi-bic-zoomroom.4Series.<version>.cplz`
 - **Published via GitHub Actions** on each push to csv-zoom-sandbox (build must pass)
 - **Package name**: `PepperDash.Essentials.Plugins.Bic.Zoom.Room`
-- **Used by**: [epi-beincourt-room](https://github.com/beincourt-engineering/epi-beincourt-room)
+- **Used by**: [epi-beincourt-room](https://github.com/pepperdash-beincourt/epi-beincourt-room)
 
 ---
 
@@ -119,12 +119,12 @@ If cherry-pick creates conflicts:
 
 - **epi-beincourt-room**: Main Beincourt courtroom plugin, depends on this fork
 - **PepperDash/epi-zoom-room**: Public upstream (source of truth for non-customized code)
-- **beincourt-engineering/\***: Other Beincourt-specific forks following the same strategy
+- **pepperdash-beincourt/\***: Other Beincourt-specific forks following the same strategy
 
 ---
 
 ## Questions or Issues?
 
-Contact: Chris Vance (Beincourt Engineering)
+Contact: Chris Vance (Pepperdash Beincourt)
 
 For upstream issues not related to Beincourt customizations, consider contributing to [PepperDash/epi-zoom-room](https://github.com/PepperDash/epi-zoom-room).
