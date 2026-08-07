@@ -1248,7 +1248,7 @@ namespace PepperDash.Essentials.Plugins
 		/// <summary>
 		/// Starts sharing the HDMI source (Zoom "black magic" cable share), also shown locally.
 		/// </summary>
-		public override void StartSharing() { _controller.ShareBlackMagic(true, true); }
+		public override void StartSharing() { StartSharingOnlyMeeting(); }
 
 		/// <summary>
 		/// Stops sharing the current presentation
