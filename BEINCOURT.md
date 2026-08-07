@@ -12,6 +12,8 @@ All Beincourt-specific customizations are isolated on the `csv-zoom-sandbox` bra
 
 **Commit**: 4e3d1b1 "feat: update StartSharing method to use StartSharingOnlyMeeting for HDMI source sharing"
 
+**Status**: ✅ Integrated in epi-beincourt-room; ready for hardware testing
+
 **File**: `src/ZoomRoom.cs` (line 1251)
 
 **Change**:
