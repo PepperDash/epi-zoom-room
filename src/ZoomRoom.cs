@@ -1136,7 +1136,7 @@ namespace PepperDash.Essentials.Plugins
 				LocalLayoutFeedback.FireUpdate();
 
 				// Compute available layouts from the ctrlInfos (enabled entries).
-				ComputeAvailableLayoutsFromScreenStatus(primaryScreen);
+				ComputeAvailableLayoutsFromScreenStatus(primaryScreen, e.IsInContentOnly);
 			}
 
 			// Update content swap state from the SDK booleans.
@@ -1157,16 +1157,16 @@ namespace PepperDash.Essentials.Plugins
 			// Spotlight=3, Gallery=4, SharedContent=5, Background=6, LocalView=7,
 			// ImmersiveView=8, ZoomAppsView=9, DynamicView=10, ThumbnailView=11, ThumbnailShareView=12
 			//
-			// NOTE: Spotlight->MultiSpeaker is a best-effort mapping based on the controller UI's "Multi-Speaker"
-			// option (no dedicated SDK enum value documents this name) -- verify against ctrl.Layout logging if
-			// the wrong layout activates when "Multi-Speaker" is selected.
+			// Confirmed live: selecting "Multi-Speaker" on the controller UI fires rawLayout=10 (DynamicView),
+			// the same value as "Dynamic Gallery" -- the SDK exposes no distinct raw type for Multi-Speaker.
+			// This returns the single canonical value for "currently selected layout" purposes; the
+			// MultiSpeaker flag is added separately in ComputeAvailableLayoutsFromScreenStatus below.
 			return screenLayoutSourceType switch
 			{
 				0 => zConfiguration.eLayoutStyle.Speaker,           // ActiveVideo = single active-speaker view
-				3 => zConfiguration.eLayoutStyle.MultiSpeaker,      // Spotlight = "Multi-Speaker" in the controller UI
 				4 => zConfiguration.eLayoutStyle.Gallery,           // Gallery
 				5 => zConfiguration.eLayoutStyle.ContentOnly,       // SharedContent = "Shared Content"
-				10 => zConfiguration.eLayoutStyle.Dynamic,          // DynamicView = "Dynamic Gallery"
+				10 => zConfiguration.eLayoutStyle.Dynamic,          // DynamicView = "Dynamic Gallery" / "Multi-Speaker"
 				11 => zConfiguration.eLayoutStyle.Thumbnail,        // ThumbnailView
 				12 => zConfiguration.eLayoutStyle.ThumbnailAndShare, // ThumbnailShareView = "Thumbnail & Share"
 				_ => zConfiguration.eLayoutStyle.None,
@@ -1176,7 +1176,7 @@ namespace PepperDash.Essentials.Plugins
 		/// <summary>
 		/// Computes AvailableLayouts from the SDK's ScreenLayoutCtrlInfo entries for the primary screen.
 		/// </summary>
-		private void ComputeAvailableLayoutsFromScreenStatus(ScreenLayoutInfoEventArgs screenInfo)
+		private void ComputeAvailableLayoutsFromScreenStatus(ScreenLayoutInfoEventArgs screenInfo, bool isInContentOnly)
 		{
 			if (screenInfo.LayoutCtrlInfos == null || screenInfo.LayoutCtrlInfos.Length == 0)
 				return; // keep previous available layouts if no ctrl info provided
@@ -1190,8 +1190,13 @@ namespace PepperDash.Essentials.Plugins
 					available |= mapped;
 			}
 
-			// Always include CancelContentOnly if ContentOnly is available (it's the toggle-off action).
-			if (available.HasFlag(zConfiguration.eLayoutStyle.ContentOnly))
+			// Multi-Speaker shares Dynamic's raw type (10) -- see MapScreenLayoutSourceTypeToLayoutStyle.
+			if (available.HasFlag(zConfiguration.eLayoutStyle.Dynamic))
+				available |= zConfiguration.eLayoutStyle.MultiSpeaker;
+
+			// CancelContentOnly is only meaningful while the SDK reports we're actually IN content-only
+			// mode -- ContentOnly being an available *destination* doesn't mean there's anything to cancel.
+			if (isInContentOnly)
 				available |= zConfiguration.eLayoutStyle.CancelContentOnly;
 
 			if (available != zConfiguration.eLayoutStyle.None)
@@ -2970,7 +2975,7 @@ namespace PepperDash.Essentials.Plugins
 		{
 			if (_screenLayoutStatus?.LayoutInfos != null && _screenLayoutStatus.LayoutInfos.Length > 0)
 			{
-				ComputeAvailableLayoutsFromScreenStatus(_screenLayoutStatus.LayoutInfos[0]);
+				ComputeAvailableLayoutsFromScreenStatus(_screenLayoutStatus.LayoutInfos[0], _screenLayoutStatus.IsInContentOnly);
 				this.LogInformation("availablelayouts: {AvailableLayouts} (from SDK ScreenLayoutStatus)", AvailableLayouts);
 				return;
 			}
@@ -3034,10 +3039,10 @@ namespace PepperDash.Essentials.Plugins
 			switch (layoutStyle)
 			{
 				case zConfiguration.eLayoutStyle.Speaker: screenLayoutSourceType = 0; break;           // ActiveVideo
-				case zConfiguration.eLayoutStyle.MultiSpeaker: screenLayoutSourceType = 3; break;       // Spotlight
 				case zConfiguration.eLayoutStyle.Gallery: screenLayoutSourceType = 4; break;            // Gallery
 				case zConfiguration.eLayoutStyle.ContentOnly: screenLayoutSourceType = 5; break;        // SharedContent
-				case zConfiguration.eLayoutStyle.Dynamic: screenLayoutSourceType = 10; break;           // DynamicView
+				case zConfiguration.eLayoutStyle.Dynamic:
+				case zConfiguration.eLayoutStyle.MultiSpeaker: screenLayoutSourceType = 10; break;      // DynamicView -- confirmed live: also fires for the controller UI's "Multi-Speaker"
 				case zConfiguration.eLayoutStyle.Thumbnail: screenLayoutSourceType = 11; break;         // ThumbnailView
 				case zConfiguration.eLayoutStyle.ThumbnailAndShare: screenLayoutSourceType = 12; break; // ThumbnailShareView
 				default:
