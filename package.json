@@ -1,6 +1,6 @@
 {
   "name": "epi-bic-zoomroom",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Beincourt fork of PepperDash epi-zoom-room with custom StartSharingOnlyMeeting API",
   "private": true,
   "devDependencies": {
