@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - csv-zoom-sandbox
+      - csv-zoom-sandbox-v2
 
 permissions:
   contents: write
