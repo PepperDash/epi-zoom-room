@@ -52,8 +52,7 @@
     "main",
     {
       "name": "csv-zoom-sandbox",
-      "prerelease": false,
-      "channel": "csv-zoom-sandbox"
+      "prerelease": false
     }
   ]
 }
