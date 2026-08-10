@@ -1120,6 +1120,18 @@ namespace PepperDash.Essentials.Plugins
 			if (e.LayoutInfos != null && e.LayoutInfos.Length > 0)
 			{
 				var primaryScreen = e.LayoutInfos[0];
+
+				this.LogDebug("ScreenLayoutStatus: screen={Screen} rawLayout={RawLayout} mappedLayout={MappedLayout}",
+					primaryScreen.Screen, primaryScreen.Layout, MapScreenLayoutSourceTypeToLayoutStyle(primaryScreen.Layout));
+				if (primaryScreen.LayoutCtrlInfos != null)
+				{
+					foreach (var ctrl in primaryScreen.LayoutCtrlInfos)
+					{
+						this.LogDebug("  ctrl: rawLayout={RawLayout} mappedLayout={MappedLayout} enable={Enable} visible={Visible}",
+							ctrl.Layout, MapScreenLayoutSourceTypeToLayoutStyle(ctrl.Layout), ctrl.Enable, ctrl.Visible);
+					}
+				}
+
 				LastSelectedLayout = MapScreenLayoutSourceTypeToLayoutStyle(primaryScreen.Layout);
 				LocalLayoutFeedback.FireUpdate();
 
@@ -1144,15 +1156,19 @@ namespace PepperDash.Essentials.Plugins
 			// ScreenLayoutSourceType: None=-1, ActiveVideo=0, SelfVideo=1, PinnedVideo=2,
 			// Spotlight=3, Gallery=4, SharedContent=5, Background=6, LocalView=7,
 			// ImmersiveView=8, ZoomAppsView=9, DynamicView=10, ThumbnailView=11, ThumbnailShareView=12
+			//
+			// NOTE: Spotlight->MultiSpeaker is a best-effort mapping based on the controller UI's "Multi-Speaker"
+			// option (no dedicated SDK enum value documents this name) -- verify against ctrl.Layout logging if
+			// the wrong layout activates when "Multi-Speaker" is selected.
 			return screenLayoutSourceType switch
 			{
-				0 => zConfiguration.eLayoutStyle.Speaker,    // ActiveVideo = speaker/active-speaker view
-				3 => zConfiguration.eLayoutStyle.Speaker,    // Spotlight = speaker variant
-				4 => zConfiguration.eLayoutStyle.Gallery,    // Gallery
-				5 => zConfiguration.eLayoutStyle.ContentOnly, // SharedContent = content-only
-				10 => zConfiguration.eLayoutStyle.Dynamic,   // DynamicView
-				11 => zConfiguration.eLayoutStyle.Thumbnail, // ThumbnailView
-				12 => zConfiguration.eLayoutStyle.Thumbnail, // ThumbnailShareView
+				0 => zConfiguration.eLayoutStyle.Speaker,           // ActiveVideo = single active-speaker view
+				3 => zConfiguration.eLayoutStyle.MultiSpeaker,      // Spotlight = "Multi-Speaker" in the controller UI
+				4 => zConfiguration.eLayoutStyle.Gallery,           // Gallery
+				5 => zConfiguration.eLayoutStyle.ContentOnly,       // SharedContent = "Shared Content"
+				10 => zConfiguration.eLayoutStyle.Dynamic,          // DynamicView = "Dynamic Gallery"
+				11 => zConfiguration.eLayoutStyle.Thumbnail,        // ThumbnailView
+				12 => zConfiguration.eLayoutStyle.ThumbnailAndShare, // ThumbnailShareView = "Thumbnail & Share"
 				_ => zConfiguration.eLayoutStyle.None,
 			};
 		}
@@ -1465,6 +1481,14 @@ namespace PepperDash.Essentials.Plugins
 																				  ==
 																				  (a.AvailableLayouts &
 																				   zConfiguration.eLayoutStyle.Dynamic));
+					trilist.SetBool(joinMap.LayoutMultiSpeakerIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.MultiSpeaker
+																				  ==
+																				  (a.AvailableLayouts &
+																				   zConfiguration.eLayoutStyle.MultiSpeaker));
+					trilist.SetBool(joinMap.LayoutThumbnailAndShareIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ThumbnailAndShare
+																				  ==
+																				  (a.AvailableLayouts &
+																				   zConfiguration.eLayoutStyle.ThumbnailAndShare));
 
 					// pass the names used to set the layout through the bridge
 					trilist.SetString(joinMap.LayoutGalleryIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Gallery.ToString());
@@ -1473,6 +1497,8 @@ namespace PepperDash.Essentials.Plugins
 					trilist.SetString(joinMap.LayoutShareAllIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ContentOnly.ToString());
 					trilist.SetString(joinMap.LayoutCancelContentOnlyIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.CancelContentOnly.ToString());
 					trilist.SetString(joinMap.LayoutDynamicIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.Dynamic.ToString());
+					trilist.SetString(joinMap.LayoutMultiSpeakerIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.MultiSpeaker.ToString());
+					trilist.SetString(joinMap.LayoutThumbnailAndShareIsAvailable.JoinNumber, zConfiguration.eLayoutStyle.ThumbnailAndShare.ToString());
 				};
 
 				trilist.SetSigFalseAction(joinMap.SwapContentWithThumbnail.JoinNumber, () => layoutsCodec.SwapContentWithThumbnail());
@@ -2952,9 +2978,11 @@ namespace PepperDash.Essentials.Plugins
 			// Fallback: no ScreenLayoutStatus received yet. Report all layouts as available.
 			AvailableLayouts = zConfiguration.eLayoutStyle.Gallery
 							 | zConfiguration.eLayoutStyle.Speaker
+							 | zConfiguration.eLayoutStyle.MultiSpeaker
 							 | zConfiguration.eLayoutStyle.Thumbnail
 							 | zConfiguration.eLayoutStyle.ContentOnly
 							 | zConfiguration.eLayoutStyle.CancelContentOnly
+							 | zConfiguration.eLayoutStyle.ThumbnailAndShare
 							 | zConfiguration.eLayoutStyle.Dynamic;
 			this.LogInformation("availablelayouts: {AvailableLayouts} (static fallback — no SDK data yet)", AvailableLayouts);
 		}
@@ -2990,27 +3018,34 @@ namespace PepperDash.Essentials.Plugins
 			LastSelectedLayout = layoutStyle;
 			LocalLayoutFeedback.FireUpdate();
 
-			// Map Essentials layout style -> ZRC SDK VideoLayoutStyle int.
-			// This must NOT be a direct (int) cast: eLayoutStyle is a [Flags] enum
-			// (Gallery=1, Speaker=2, Strip=4, ShareAll=8) whose values do not line up
-			// with the SDK's VideoLayoutStyle (Gallery=1, Speaker=2, Thumbnail=3,
-			// ContentOnly=4). The previous code cast to SetVideoOrder, which only
-			// reorders participant tiles and ignored Strip/ShareAll (out of range).
-			int videoLayoutStyle;
+			// CancelContentOnly is a VideoLayoutStyle-only action -- there's no ScreenLayoutSourceType
+			// equivalent to "leave content-only mode", so it stays on the deprecated call.
+			if (layoutStyle == zConfiguration.eLayoutStyle.CancelContentOnly)
+			{
+				_controller.UpdateVideoLayoutStyle(5); // VideoLayoutStyleCancelContentOnly
+				return;
+			}
+
+			// Map Essentials layout style -> SDK ScreenLayoutSourceType int (kept in sync with
+			// MapScreenLayoutSourceTypeToLayoutStyle above so commanded/reported layouts agree).
+			// Uses SetScreenLayout, not the deprecated UpdateVideoLayoutStyle/VideoLayoutStyle, since
+			// MultiSpeaker/ThumbnailAndShare have no VideoLayoutStyle equivalent.
+			int screenLayoutSourceType;
 			switch (layoutStyle)
 			{
-				case zConfiguration.eLayoutStyle.Gallery: videoLayoutStyle = 1; break; // VideoLayoutStyleGallery
-				case zConfiguration.eLayoutStyle.Speaker: videoLayoutStyle = 2; break; // VideoLayoutStyleSpeaker
-				case zConfiguration.eLayoutStyle.Thumbnail: videoLayoutStyle = 3; break; // VideoLayoutStyleThumbnail
-				case zConfiguration.eLayoutStyle.ContentOnly: videoLayoutStyle = 4; break; // VideoLayoutStyleContentOnly
-				case zConfiguration.eLayoutStyle.CancelContentOnly: videoLayoutStyle = 5; break; // VideoLayoutStyleCancelContentOnly
-				case zConfiguration.eLayoutStyle.Dynamic: videoLayoutStyle = 6; break; // VideoLayoutStyleDynamic
+				case zConfiguration.eLayoutStyle.Speaker: screenLayoutSourceType = 0; break;           // ActiveVideo
+				case zConfiguration.eLayoutStyle.MultiSpeaker: screenLayoutSourceType = 3; break;       // Spotlight
+				case zConfiguration.eLayoutStyle.Gallery: screenLayoutSourceType = 4; break;            // Gallery
+				case zConfiguration.eLayoutStyle.ContentOnly: screenLayoutSourceType = 5; break;        // SharedContent
+				case zConfiguration.eLayoutStyle.Dynamic: screenLayoutSourceType = 10; break;           // DynamicView
+				case zConfiguration.eLayoutStyle.Thumbnail: screenLayoutSourceType = 11; break;         // ThumbnailView
+				case zConfiguration.eLayoutStyle.ThumbnailAndShare: screenLayoutSourceType = 12; break; // ThumbnailShareView
 				default:
-					this.LogWarning("SetLayout: no SDK VideoLayoutStyle mapping for {LayoutStyle}", layoutStyle);
+					this.LogWarning("SetLayout: no SDK ScreenLayoutSourceType mapping for {LayoutStyle}", layoutStyle);
 					return;
 			}
 
-			_controller.UpdateVideoLayoutStyle(videoLayoutStyle);
+			_controller.SetScreenLayout(0, screenLayoutSourceType); // screen 0 = primary
 		}
 
 		public void SwapContentWithThumbnail()
@@ -3053,11 +3088,7 @@ namespace PepperDash.Essentials.Plugins
 
 		public void LocalLayoutToggle()
 		{
-			var currentLayout = LocalLayoutFeedback.StringValue;
-
-			var eCurrentLayout = (int)Enum.Parse(typeof(zConfiguration.eLayoutStyle), currentLayout, true);
-
-			var nextLayout = GetNextLayout(eCurrentLayout);
+			var nextLayout = GetNextLayout(LastSelectedLayout);
 
 			if (nextLayout != zConfiguration.eLayoutStyle.None)
 			{
@@ -3065,32 +3096,36 @@ namespace PepperDash.Essentials.Plugins
 			}
 		}
 
+		// Cycle order for LocalLayoutToggle(). Share-related layouts (ContentOnly/CancelContentOnly/
+		// ThumbnailAndShare) are intentionally excluded -- those are driven by sharing state, not this toggle.
+		private static readonly zConfiguration.eLayoutStyle[] LayoutCycleOrder =
+		{
+			zConfiguration.eLayoutStyle.Gallery,
+			zConfiguration.eLayoutStyle.Speaker,
+			zConfiguration.eLayoutStyle.MultiSpeaker,
+			zConfiguration.eLayoutStyle.Thumbnail,
+			zConfiguration.eLayoutStyle.Dynamic,
+		};
+
 		/// <summary>
-		/// Tries to get the next available layout
+		/// Tries to get the next available layout, wrapping around <see cref="LayoutCycleOrder"/>.
 		/// </summary>
-		/// <param name="currentLayout"></param>
-		/// <returns></returns>
-		private zConfiguration.eLayoutStyle GetNextLayout(int currentLayout)
+		private zConfiguration.eLayoutStyle GetNextLayout(zConfiguration.eLayoutStyle currentLayout)
 		{
 			if (AvailableLayouts == zConfiguration.eLayoutStyle.None)
 			{
 				return zConfiguration.eLayoutStyle.None;
 			}
 
-			// Enum values are sequential: Gallery=1, Speaker=2, Thumbnail=3, ContentOnly=4, CancelContentOnly=5, Dynamic=6
-			// Advance to the next value, wrapping from Dynamic back to Gallery
-			var next = currentLayout >= (int)zConfiguration.eLayoutStyle.Dynamic
-				? zConfiguration.eLayoutStyle.Gallery
-				: (zConfiguration.eLayoutStyle)(currentLayout + 1);
+			var startIndex = Array.IndexOf(LayoutCycleOrder, currentLayout);
+			for (var offset = 1; offset <= LayoutCycleOrder.Length; offset++)
+			{
+				var candidate = LayoutCycleOrder[(startIndex + offset + LayoutCycleOrder.Length) % LayoutCycleOrder.Length];
+				if (AvailableLayouts.HasFlag(candidate))
+					return candidate;
+			}
 
-			if ((AvailableLayouts & next) == next)
-			{
-				return next;
-			}
-			else
-			{
-				return GetNextLayout((int)next);
-			}
+			return zConfiguration.eLayoutStyle.None;
 		}
 
 		public void LocalLayoutToggleSingleProminent()

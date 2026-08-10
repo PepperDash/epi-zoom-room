@@ -56,17 +56,23 @@ namespace PepperDash.Essentials.Plugins
             }
         }
 
+        // Values must be distinct bit positions -- these are combined with | and tested with HasFlag().
+        // (Previous sequential values 1,2,3,4,5,6 collided under bitwise OR, e.g. Thumbnail(3) == Gallery(1)|Speaker(2),
+        // causing layouts to spuriously report as available.)
         [Flags]
         public enum eLayoutStyle
         {
             None = 0,
-            Gallery = 1,
-            Speaker = 2,
-            Thumbnail = 3,
-
-            ContentOnly = 4,
-            CancelContentOnly = 5,
-            Dynamic = 6,
+            Gallery = 1 << 0,
+            Speaker = 1 << 1,
+            Thumbnail = 1 << 2,
+            ContentOnly = 1 << 3,
+            CancelContentOnly = 1 << 4,
+            Dynamic = 1 << 5,
+            /// <summary>Zoom Room controller UI "Multi-Speaker" layout (SDK ScreenLayoutSourceType.Spotlight).</summary>
+            MultiSpeaker = 1 << 6,
+            /// <summary>Zoom Room controller UI "Thumbnail &amp; Share" layout, shown while content is shared (SDK ScreenLayoutSourceType.ThumbnailShareView).</summary>
+            ThumbnailAndShare = 1 << 7,
         }
 
         public enum eLayoutSize

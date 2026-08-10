@@ -331,6 +331,34 @@ namespace PepperDash.Essentials.Plugins
 				Description = "Digital: FB layout 'Dynamic' is available; Serial: layout name string",
 				JoinCapabilities = eJoinCapabilities.ToSIMPL,
 				JoinType = eJoinType.DigitalSerial
+			});
+
+		[JoinName("LayoutMultiSpeakerIsAvailable")]
+		public JoinDataComplete LayoutMultiSpeakerIsAvailable = new JoinDataComplete(
+			new JoinData
+			{
+				JoinNumber = 227,
+				JoinSpan = 1
+			},
+			new JoinMetadata
+			{
+				Description = "Digital: FB layout 'MultiSpeaker' is available; Serial: layout name string",
+				JoinCapabilities = eJoinCapabilities.ToSIMPL,
+				JoinType = eJoinType.DigitalSerial
+			});
+
+		[JoinName("LayoutThumbnailAndShareIsAvailable")]
+		public JoinDataComplete LayoutThumbnailAndShareIsAvailable = new JoinDataComplete(
+			new JoinData
+			{
+				JoinNumber = 228,
+				JoinSpan = 1
+			},
+			new JoinMetadata
+			{
+				Description = "Digital: FB layout 'ThumbnailAndShare' is available; Serial: layout name string",
+				JoinCapabilities = eJoinCapabilities.ToSIMPL,
+				JoinType = eJoinType.DigitalSerial
 			});		
 
         [JoinName("StartRecording")]
