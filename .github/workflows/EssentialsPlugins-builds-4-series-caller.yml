@@ -14,20 +14,17 @@ permissions:
   packages: write
 
 jobs:
-  getVersion:
-    uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-getversion.yml@main
-    secrets: inherit
+  # DISABLED: Using custom semantic-release workflow instead of PepperDash essentialsplugins-getversion
+  # See .github/workflows/semantic-release.yml for automated versioning
   build-4Series:
     # Temporarily pinned to the branch that authenticates the org GitHub Packages feed so this
     # plugin's INTERNAL dependency (PepperDash.ZoomRoom.Sdk) restores in CI. Revert to @main once
     # PepperDash/workflow-templates#<pr> merges.
     uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-4Series-builds.yml@feature/authenticate-github-packages-feed
     secrets: inherit
-    needs: getVersion
-    if: needs.getVersion.outputs.newVersion == 'true'
+    if: startsWith(github.ref, 'refs/tags/v')
     with:
-      newVersion: ${{ needs.getVersion.outputs.newVersion }}
-      version: ${{ needs.getVersion.outputs.version }}
-      tag: ${{ needs.getVersion.outputs.tag }}
-      channel: ${{ needs.getVersion.outputs.channel }}
-      # bypassPackageCheck: true
+      newVersion: 'true'
+      version: ${{ github.ref_name }}
+      tag: ${{ github.ref_name }}
+      channel: ''
