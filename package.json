@@ -1,0 +1,23 @@
+{
+  "name": "epi-bic-zoomroom",
+  "version": "1.0.0",
+  "description": "Beincourt fork of PepperDash epi-zoom-room with custom StartSharingOnlyMeeting API",
+  "private": true,
+  "devDependencies": {
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/release-notes-generator": "^14.1.1",
+    "conventional-changelog-conventionalcommits": "^10.2.1",
+    "semantic-release": "^25.0.9"
+  },
+  "scripts": {
+    "release": "semantic-release"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pepperdash-beincourt/epi-bic-zoomroom.git"
+  },
+  "author": "Pepperdash Beincourt",
+  "license": "MIT"
+}
