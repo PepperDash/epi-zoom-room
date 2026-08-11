@@ -125,7 +125,7 @@ namespace PepperDash.Essentials.Plugins
 			Status = new ZoomRoomStatus();
 			Configuration = new ZoomRoomConfiguration();
 
-			_sdkMonitor = new SdkConnectionMonitor(this);
+			_sdkMonitor = new SdkConnectionMonitor(this, () => _controller.RunHealthCheck("scheduled poll"));
 			CommunicationMonitor = _sdkMonitor;
 			DeviceManager.AddDevice(CommunicationMonitor);
 
@@ -624,6 +624,9 @@ namespace PepperDash.Essentials.Plugins
 				s => _controller.RepairWithConfiguredCode(),
 				"forceRepairZoom", "Clear stored credentials and re-pair using the configured activation code", ConsoleAccessLevelEnum.AccessOperator);
 
+			// Starts the liveness-poll watchdog that keeps devcomm honest and auto-repairs silent drops.
+			CommunicationMonitor.Start();
+
 			return base.CustomActivate();
 		}
 
@@ -679,6 +682,7 @@ namespace PepperDash.Essentials.Plugins
 		protected override void Initialize()
 		{
 			_controller.ConnectionStateChanged += OnControllerConnectionStateChanged;
+			_controller.HealthStateChanged += OnControllerHealthStateChanged;
 			_controller.PairRoomResult += (s, e) => this.LogInformation("PairRoomResult [{Code}]: {Desc}", e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
 			_controller.MeetingStatusChanged += OnControllerMeetingStatusChanged;
 			_controller.InstantMeetingStarted += OnControllerInstantMeetingStarted;
@@ -781,6 +785,27 @@ namespace PepperDash.Essentials.Plugins
 				}
 			}
 			else if (!online)
+			{
+				StopBookingRefreshTimer();
+				ResetMeetingState();
+				lock (_phonebookSettleLock) _phonebookSettleTimer?.Stop();
+				lock (_directoryLock) _directoryContactsById.Clear();
+				PhonebookSyncState.CodecDisconnected();
+			}
+		}
+
+		// Watchdog-driven truth for silent/half-open drops the SDK never reported. Keeps devcomm honest
+		// and runs the same teardown as a real disconnect when going offline; full on-connect seeding is
+		// left to the SDK's Connected event produced by auto-repair.
+		private void OnControllerHealthStateChanged(object sender, bool online)
+		{
+			if (_isConnected == online) return;
+
+			this.LogInformation("Health watchdog reports {State}", online ? "online" : "offline");
+			_isConnected = online;
+			_sdkMonitor.SetOnline(online);
+
+			if (!online)
 			{
 				StopBookingRefreshTimer();
 				ResetMeetingState();

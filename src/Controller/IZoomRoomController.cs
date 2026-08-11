@@ -20,6 +20,20 @@ namespace PepperDash.Essentials.Plugins
         int GetConnectionState();
 
         /// <summary>
+        /// Raised with the watchdog's assessment of whether the room is actually reachable (true=online).
+        /// Distinct from <see cref="ConnectionStateChanged"/>: it fires on silent/half-open drops the SDK
+        /// never reports, so devcomm can be corrected and auto-repair triggered.
+        /// </summary>
+        event EventHandler<bool> HealthStateChanged;
+
+        /// <summary>
+        /// Actively probes the link (real SDK round-trip). If the room is unreachable it marks the
+        /// controller offline and starts auto-repair; if a prior offline was a false alarm it clears it.
+        /// Safe to call periodically (comms-monitor poll) or on demand (after command failures).
+        /// </summary>
+        void RunHealthCheck(string reason);
+
+        /// <summary>
         /// Synchronously queries the current meeting status. Unlike <see cref="MeetingStatusChanged"/>,
         /// this does not require a status change to have occurred - call it once connected to pick up a
         /// meeting that was already in progress before the SDK callbacks were registered.
