@@ -1705,6 +1705,11 @@ namespace PepperDash.Essentials.Plugins
 				AcceptCall(incomingCall);
 		}
 
+		// A ringing (unanswered) invite isn't actually "in a call" -- only report true once a call
+		// is answered/connected, so mobile control doesn't show an in-call state for a pending invite.
+		public override bool IsInCall =>
+			ActiveCalls != null && ActiveCalls.Any(c => c.IsActiveCall && c.Status != eCodecCallStatus.Ringing);
+
 		public override void AcceptCall(CodecActiveCallItem call)
 		{
 			if (call == null) return;
@@ -2815,8 +2820,8 @@ namespace PepperDash.Essentials.Plugins
 
 		public List<CodecCommandWithLabel> SelfviewPipPositions = new List<CodecCommandWithLabel>()
 		{
-			new CodecCommandWithLabel("UpLeft", "Center Left"),
-			new CodecCommandWithLabel("UpRight", "Center Right"),
+			new CodecCommandWithLabel("UpLeft", "Upper Left"),
+			new CodecCommandWithLabel("UpRight", "Upper Right"),
 			new CodecCommandWithLabel("DownRight", "Lower Right"),
 			new CodecCommandWithLabel("DownLeft", "Lower Left")
 		};
