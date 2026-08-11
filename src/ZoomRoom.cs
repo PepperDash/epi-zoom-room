@@ -1366,7 +1366,7 @@ namespace PepperDash.Essentials.Plugins
 				this.LogWarning("StartSharing: no HDMI source detected (connected={Connected} dataAvailable={DataAvailable}) — ShareBlackMagic will likely fail",
 					Status.Sharing.isBlackMagicConnected, Status.Sharing.isBlackMagicDataAvailable);
 			}
-			_controller.ShareBlackMagic(true, true);
+			_controller.ShareBlackMagic(true, false);
 		}
 
 		/// <summary>
