@@ -25,7 +25,7 @@ namespace PepperDash.Essentials.AppServer.Messengers
         protected override void ExecuteToggle() => _codec.SelfviewPipSizeToggle();
         protected override void ExecuteSet(CodecCommandWithLabel cmd) => _codec.SelfviewPipSizeSet(cmd);
         protected override StringFeedback GetFeedback()               => _codec.SelfviewPipSizeFeedback;
-        protected override IEnumerable<CodecCommandWithLabel> GetOptions() => _codec.SelfviewPipSizes ?? Enumerable.Empty<CodecCommandWithLabel>();
+        protected override IEnumerable<CodecCommandWithLabel> GetOptions() => _codec.AvailableSelfviewPipSizes ?? Enumerable.Empty<CodecCommandWithLabel>();
 
         protected override DeviceStateMessageBase BuildFullStatus() =>
             new SelfviewSizeStateMessage

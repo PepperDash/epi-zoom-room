@@ -242,6 +242,7 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<AirPlayStatusEventArgs> AirPlayStatusChanged;
         event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         event EventHandler<ScreenLayoutStatusEventArgs> ScreenLayoutStatusChanged;
+        event EventHandler<VideoThumbInfoEventArgs> VideoThumbInfoChanged;
         event EventHandler<SIPCall> SipCallStatusChanged;
         event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
         event EventHandler<ContactListEventArgs> ContactListChanged;

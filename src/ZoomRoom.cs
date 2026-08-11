@@ -68,8 +68,9 @@ namespace PepperDash.Essentials.Plugins
 		private bool _contentSwappedWithThumbnail;
 		// Screen layout status, driven by the SDK's ScreenLayoutStatus notification.
 		private ScreenLayoutStatusEventArgs _screenLayoutStatus;
-		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
-		private ushort _sdkSpeakerVolumeLevel;
+		// Self-view PiP support/state, driven by the SDK's VideoThumbInfo notification.
+		private bool _sdkSelfviewThumbSupported = true;
+		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.		private ushort _sdkSpeakerVolumeLevel;
 		private bool _sdkSpeakerMuted;
 
 		// True once the SDK reports the room Connected/Established. Gates outbound command methods so
@@ -702,6 +703,7 @@ namespace PepperDash.Essentials.Plugins
 			_controller.AirPlayStatusChanged += OnControllerAirPlayStatusChanged;
 			_controller.VideoPageStatusChanged += OnControllerVideoPageStatusChanged;
 			_controller.ScreenLayoutStatusChanged += OnControllerScreenLayoutStatusChanged;
+			_controller.VideoThumbInfoChanged += OnControllerVideoThumbInfoChanged;
 			_controller.SipCallStatusChanged += OnControllerSipCallStatusChanged;
 			_controller.ContactListChanged += OnControllerContactListChanged;
 			_controller.MeetingListChanged += OnControllerMeetingListChanged;
@@ -1110,6 +1112,15 @@ namespace PepperDash.Essentials.Plugins
 			_currentPageVideoType = e.PageVideoType; // keep the SDK's current page type for TurnVideoPage
 			LayoutViewIsOnFirstPageFeedback.FireUpdate();
 			LayoutViewIsOnLastPageFeedback.FireUpdate();
+		}
+
+		private void OnControllerVideoThumbInfoChanged(object sender, VideoThumbInfoEventArgs e)
+		{
+			this.LogDebug("VideoThumbInfo: isSupported={IsSupported} position={Position} size={Size} layout={Layout}",
+				e.IsSupported, e.Position, e.Size, LastSelectedLayout);
+
+			_sdkSelfviewThumbSupported = e.IsSupported;
+			SelfviewPipSizeFeedback.FireUpdate();
 		}
 
 		private void OnControllerScreenLayoutStatusChanged(object sender, ScreenLayoutStatusEventArgs e)
@@ -2789,16 +2800,16 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SelfviewPipPositionToggle()
 		{
-			if (_currentSelfviewPipPosition != null)
-			{
-				var nextPipPositionIndex = SelfviewPipPositions.IndexOf(_currentSelfviewPipPosition) + 1;
+			var available = AvailableSelfviewPipPositions;
+			if (_currentSelfviewPipPosition == null || available.Count == 0) return;
 
-				if (nextPipPositionIndex >= SelfviewPipPositions.Count)
-					// Check if we need to loop back to the first item in the list
-					nextPipPositionIndex = 0;
+			var nextPipPositionIndex = available.IndexOf(_currentSelfviewPipPosition) + 1;
 
-				SelfviewPipPositionSet(SelfviewPipPositions[nextPipPositionIndex]);
-			}
+			if (nextPipPositionIndex >= available.Count || nextPipPositionIndex < 0)
+				// Not found (current position isn't valid for this layout) or wrapped past the end.
+				nextPipPositionIndex = 0;
+
+			SelfviewPipPositionSet(available[nextPipPositionIndex]);
 		}
 
 		public List<CodecCommandWithLabel> SelfviewPipPositions = new List<CodecCommandWithLabel>()
@@ -2808,6 +2819,33 @@ namespace PepperDash.Essentials.Plugins
 			new CodecCommandWithLabel("DownRight", "Lower Right"),
 			new CodecCommandWithLabel("DownLeft", "Lower Left")
 		};
+
+		// Which self-view PiP positions make sense per layout. No layout-specific restrictions are known
+		// yet -- layouts not listed fall back to all positions -- verify/tune against the physical
+		// controller UI using the VideoThumbInfoChanged debug log ("VideoThumbInfo: ...").
+		private static readonly Dictionary<zConfiguration.eLayoutStyle, string[]> SelfviewPositionsByLayout = new()
+		{
+			{ zConfiguration.eLayoutStyle.ContentOnly, Array.Empty<string>() }, // full-screen share -- no floating PiP to position
+			{ zConfiguration.eLayoutStyle.CancelContentOnly, Array.Empty<string>() },
+		};
+
+		/// <summary>
+		/// Self-view PiP positions valid for the currently selected layout, further gated by the SDK's
+		/// VideoThumbInfo.isSupported flag (empty when the SDK reports the self-view thumb isn't
+		/// supported at all in the current context, since there's nothing to position).
+		/// </summary>
+		public List<CodecCommandWithLabel> AvailableSelfviewPipPositions
+		{
+			get
+			{
+				if (!_sdkSelfviewThumbSupported)
+					return new List<CodecCommandWithLabel>();
+
+				return SelfviewPositionsByLayout.TryGetValue(LastSelectedLayout, out var allowed)
+					? SelfviewPipPositions.Where(p => allowed.Contains(p.Command)).ToList()
+					: SelfviewPipPositions;
+			}
+		}
 
 		private void ComputeSelfviewPipPositionStatus()
 		{
@@ -2843,16 +2881,16 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SelfviewPipSizeToggle()
 		{
-			if (_currentSelfviewPipSize != null)
-			{
-				var nextPipSizeIndex = SelfviewPipSizes.IndexOf(_currentSelfviewPipSize) + 1;
+			var available = AvailableSelfviewPipSizes;
+			if (_currentSelfviewPipSize == null || available.Count == 0) return;
 
-				if (nextPipSizeIndex >= SelfviewPipSizes.Count)
-					// Check if we need to loop back to the first item in the list
-					nextPipSizeIndex = 0;
+			var nextPipSizeIndex = available.IndexOf(_currentSelfviewPipSize) + 1;
 
-				SelfviewPipSizeSet(SelfviewPipSizes[nextPipSizeIndex]);
-			}
+			if (nextPipSizeIndex >= available.Count || nextPipSizeIndex < 0)
+				// Not found (current size isn't valid for this layout) or wrapped past the end.
+				nextPipSizeIndex = 0;
+
+			SelfviewPipSizeSet(available[nextPipSizeIndex]);
 		}
 
 		public List<CodecCommandWithLabel> SelfviewPipSizes = new List<CodecCommandWithLabel>()
@@ -2863,6 +2901,37 @@ namespace PepperDash.Essentials.Plugins
 			new CodecCommandWithLabel("Size3", "Size 3"),
 			new CodecCommandWithLabel("Strip", "Strip")
 		};
+
+		// Which self-view PiP sizes make sense per layout. Best-effort starting point based on Zoom UX
+		// conventions (floating self-view PiP is redundant/unavailable once your own video is already
+		// full-screen shared content, or already shown in a thumbnail strip) -- verify/tune against the
+		// physical controller UI using the VideoThumbInfoChanged debug log ("VideoThumbInfo: ...").
+		// Layouts not listed here fall back to all sizes being offered.
+		private static readonly Dictionary<zConfiguration.eLayoutStyle, string[]> SelfviewSizesByLayout = new()
+		{
+			{ zConfiguration.eLayoutStyle.Thumbnail, new[] { "Off", "Size1", "Size2", "Size3" } }, // Strip is redundant -- already a thumbnail strip
+			{ zConfiguration.eLayoutStyle.ThumbnailAndShare, new[] { "Off", "Size1", "Size2", "Size3" } },
+			{ zConfiguration.eLayoutStyle.ContentOnly, new[] { "Off" } }, // full-screen share -- no room for a floating PiP
+			{ zConfiguration.eLayoutStyle.CancelContentOnly, new[] { "Off" } },
+		};
+
+		/// <summary>
+		/// Self-view PiP sizes valid for the currently selected layout, further gated by the SDK's
+		/// VideoThumbInfo.isSupported flag (only "Off" is offered when the SDK reports the self-view
+		/// thumb isn't supported at all in the current context).
+		/// </summary>
+		public List<CodecCommandWithLabel> AvailableSelfviewPipSizes
+		{
+			get
+			{
+				if (!_sdkSelfviewThumbSupported)
+					return SelfviewPipSizes.Where(s => s.Command.Equals("Off", StringComparison.OrdinalIgnoreCase)).ToList();
+
+				return SelfviewSizesByLayout.TryGetValue(LastSelectedLayout, out var allowed)
+					? SelfviewPipSizes.Where(s => allowed.Contains(s.Command)).ToList()
+					: SelfviewPipSizes;
+			}
+		}
 
 		private void ComputeSelfviewPipSizeStatus()
 		{

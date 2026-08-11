@@ -50,6 +50,11 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
             GetFeedback().OutputChange += (s, e) =>
                 Task.Run(() => PostStatusMessage(BuildChangedStatus(e.StringValue)));
+
+            // Available options can be layout-dependent (e.g. self-view size restrictions) -- re-push
+            // full status, not just the changed value, whenever the layout changes.
+            _codec.LayoutInfoChanged += (s, e) =>
+                Task.Run(() => PostStatusMessage(BuildFullStatus()));
         }
 
         protected CodecCommandWithLabel FindOption(string value)
@@ -79,7 +84,7 @@ namespace PepperDash.Essentials.AppServer.Messengers
         protected override void ExecuteToggle() => _codec.SelfviewPipPositionToggle();
         protected override void ExecuteSet(CodecCommandWithLabel cmd) => _codec.SelfviewPipPositionSet(cmd);
         protected override StringFeedback GetFeedback()               => _codec.SelfviewPipPositionFeedback;
-        protected override IEnumerable<CodecCommandWithLabel> GetOptions() => _codec.SelfviewPipPositions ?? Enumerable.Empty<CodecCommandWithLabel>();
+        protected override IEnumerable<CodecCommandWithLabel> GetOptions() => _codec.AvailableSelfviewPipPositions ?? Enumerable.Empty<CodecCommandWithLabel>();
 
         protected override DeviceStateMessageBase BuildFullStatus() =>
             new SelfviewPositionStateMessage
