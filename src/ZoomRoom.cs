@@ -70,7 +70,8 @@ namespace PepperDash.Essentials.Plugins
 		private ScreenLayoutStatusEventArgs _screenLayoutStatus;
 		// Self-view PiP support/state, driven by the SDK's VideoThumbInfo notification.
 		private bool _sdkSelfviewThumbSupported = true;
-		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.		private ushort _sdkSpeakerVolumeLevel;
+		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
+		private ushort _sdkSpeakerVolumeLevel;
 		private bool _sdkSpeakerMuted;
 
 		// True once the SDK reports the room Connected/Established. Gates outbound command methods so
