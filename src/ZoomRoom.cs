@@ -1355,12 +1355,19 @@ namespace PepperDash.Essentials.Plugins
 		}
 
 		/// <summary>
-		/// Starts sharing HDMI source
-		/// </summary>
-		/// <summary>
 		/// Starts sharing the HDMI source (Zoom "black magic" cable share), also shown locally.
+		/// Requires an HDMI source physically connected and providing an active signal -- if not,
+		/// the SDK call fails immediately (see isBlackMagicConnected/isBlackMagicDataAvailable).
 		/// </summary>
-		public override void StartSharing() { _controller.ShareBlackMagic(true, true); }
+		public override void StartSharing()
+		{
+			if (!Status.Sharing.isBlackMagicConnected || !Status.Sharing.isBlackMagicDataAvailable)
+			{
+				this.LogWarning("StartSharing: no HDMI source detected (connected={Connected} dataAvailable={DataAvailable}) — ShareBlackMagic will likely fail",
+					Status.Sharing.isBlackMagicConnected, Status.Sharing.isBlackMagicDataAvailable);
+			}
+			_controller.ShareBlackMagic(true, true);
+		}
 
 		/// <summary>
 		/// Stops sharing the current presentation
