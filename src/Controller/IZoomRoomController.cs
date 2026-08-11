@@ -226,6 +226,8 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<SdkEventArgs> ExitMeeting;
         event EventHandler<SdkEventArgs> MeetingNeedsPassword;
         event EventHandler<MeetingInviteEventArgs> MeetingInvite;
+        /// <summary>Fires when a pending meeting invite is resolved -- answered here, answered elsewhere, declined, or expired/cancelled by the caller.</summary>
+        event EventHandler<MeetingInviteTreatedEventArgs> MeetingInviteTreated;
         event EventHandler<SdkEventArgs> MeetingLockStatusChanged;
         event EventHandler<SdkEventArgs> AudioMuteStatusChanged;
         event EventHandler<SdkEventArgs> RecordingStatusChanged;

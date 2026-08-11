@@ -260,6 +260,7 @@ namespace PepperDash.Essentials.Plugins
                 }
             };
             _sdk.MeetingInvite           += (s, e) => SafeRaise(() => MeetingInvite?.Invoke(this, e));
+            _sdk.MeetingInviteTreated    += (s, e) => SafeRaise(() => MeetingInviteTreated?.Invoke(this, e));
             _sdk.MeetingLockStatus       += (s, e) => SafeRaise(() => MeetingLockStatusChanged?.Invoke(this, e));
             _sdk.AudioStatus             += (s, e) => SafeRaise(() => AudioMuteStatusChanged?.Invoke(this, e));
             _sdk.RecordingStatus         += (s, e) => SafeRaise(() => RecordingStatusChanged?.Invoke(this, e));
@@ -498,6 +499,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<SdkEventArgs> ExitMeeting;
         public event EventHandler<SdkEventArgs> MeetingNeedsPassword;
         public event EventHandler<MeetingInviteEventArgs> MeetingInvite;
+        public event EventHandler<MeetingInviteTreatedEventArgs> MeetingInviteTreated;
         public event EventHandler<SdkEventArgs> MeetingLockStatusChanged;
         public event EventHandler<SdkEventArgs> AudioMuteStatusChanged;
         public event EventHandler<SdkEventArgs> RecordingStatusChanged;

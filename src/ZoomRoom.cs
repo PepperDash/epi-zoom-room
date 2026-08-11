@@ -56,6 +56,11 @@ namespace PepperDash.Essentials.Plugins
 		// Ringing incoming meeting-invite, surfaced as an ActiveCall so the standard Accept/Reject
 		// path works. Answered via AnswerMeetingInvite (the native side cached the full invite).
 		private CodecActiveCallItem _pendingInviteCall;
+		// Fallback safety net: the SDK only notifies of a resolved invite via MeetingInviteTreated
+		// (answered/declined/expired elsewhere) -- a silently-ignored invite gets no such notification,
+		// so this timer drops it from ActiveCalls after MeetingInviteTimeoutMs regardless.
+		private CTimer _pendingInviteTimeoutTimer;
+		private const int DefaultMeetingInviteTimeoutMs = 45000;
 		private string _currentMeetingId = string.Empty;
 		private string _currentMeetingNumber = string.Empty;
 		private string _currentMeetingName = string.Empty;
@@ -681,6 +686,7 @@ namespace PepperDash.Essentials.Plugins
 			_controller.ExitMeeting += OnControllerExitMeeting;
 			_controller.MeetingNeedsPassword += OnControllerMeetingNeedsPassword;
 			_controller.MeetingInvite += OnControllerMeetingInvite;
+			_controller.MeetingInviteTreated += OnControllerMeetingInviteTreated;
 			_controller.MeetingLockStatusChanged += OnControllerMeetingLockStatusChanged;
 			_controller.AudioMuteStatusChanged += OnControllerAudioMuteStatusChanged;
 			_controller.RecordingStatusChanged += OnControllerRecordingStatusChanged;
@@ -958,6 +964,47 @@ namespace PepperDash.Essentials.Plugins
 			};
 			ActiveCalls.Add(_pendingInviteCall);
 			OnCallStatusChange(_pendingInviteCall);
+
+			var timeoutMs = _props.MeetingInviteTimeoutMs > 0 ? _props.MeetingInviteTimeoutMs : DefaultMeetingInviteTimeoutMs;
+			_pendingInviteTimeoutTimer?.Stop();
+			_pendingInviteTimeoutTimer = new CTimer(_ => OnPendingInviteTimedOut(), timeoutMs);
+		}
+
+		// The SDK's only "invite resolved" signal (MeetingInviteTreated) doesn't fire for an invite
+		// that's simply left ringing with no action anywhere -- this is the fallback for that case.
+		private void OnPendingInviteTimedOut()
+		{
+			var item = _pendingInviteCall;
+			if (item == null) return;
+
+			this.LogInformation("Meeting invite from \"{Caller}\" timed out with no response after {TimeoutMs}ms — removing from active calls",
+				item.Name, _props.MeetingInviteTimeoutMs > 0 ? _props.MeetingInviteTimeoutMs : DefaultMeetingInviteTimeoutMs);
+
+			item.Status = eCodecCallStatus.Disconnected;
+			OnCallStatusChange(item);
+			ActiveCalls.Remove(item);
+			_pendingInviteCall = null;
+		}
+
+		private void OnControllerMeetingInviteTreated(object sender, MeetingInviteTreatedEventArgs e)
+		{
+			// Fires when the invite is resolved by any means other than our own AcceptCall/RejectCall
+			// (e.g. answered/declined on another paired device, or expired/cancelled by the caller).
+			_pendingInviteTimeoutTimer?.Stop();
+
+			var item = _pendingInviteCall;
+			if (item == null || !string.Equals(item.Number, e.MeetingNumber, StringComparison.Ordinal))
+				return; // already resolved locally, or this is a different invite
+
+			this.LogInformation("MeetingInvite from \"{Caller}\" treated elsewhere: accepted={Accepted}", item.Name, e.Accepted);
+
+			// AcceptCall/RejectCall already promote/clear locally-answered invites; this only needs to
+			// clean up when nothing local has touched it yet (accepted=false is the common case here,
+			// but even accepted=true elsewhere means it's no longer "ringing" for this device).
+			item.Status = eCodecCallStatus.Disconnected;
+			OnCallStatusChange(item);
+			ActiveCalls.Remove(item);
+			_pendingInviteCall = null;
 		}
 
 		private void OnControllerMeetingLockStatusChanged(object sender, SdkEventArgs e)
@@ -1719,6 +1766,7 @@ namespace PepperDash.Essentials.Plugins
 			// status promotes this ActiveCall to Connected.
 			if (call.Direction == eCodecCallDirection.Incoming && call.Status == eCodecCallStatus.Ringing)
 			{
+				_pendingInviteTimeoutTimer?.Stop();
 				_controller.AnswerMeetingInvite(true);
 				_pendingInviteCall = null;
 				return;
@@ -1741,6 +1789,7 @@ namespace PepperDash.Essentials.Plugins
 		{
 			// Decline the incoming meeting invite via the SDK (answers the cached invite with
 			// accept=false), then clear the ringing ActiveCall.
+			_pendingInviteTimeoutTimer?.Stop();
 			_controller.AnswerMeetingInvite(false);
 
 			var item = call ?? _pendingInviteCall;
