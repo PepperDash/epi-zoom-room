@@ -64,6 +64,18 @@ namespace PepperDash.Essentials.AppServer.Messengers
             ContentSwappedWithThumbnail = _codec.ContentSwappedWithThumbnailFeedback.BoolValue
         };
 
+        private static readonly Dictionary<zConfiguration.eLayoutStyle, string> LayoutDisplayLabels = new()
+        {
+            { zConfiguration.eLayoutStyle.Gallery, "Gallery" },
+            { zConfiguration.eLayoutStyle.Speaker, "Speaker" },
+            { zConfiguration.eLayoutStyle.Thumbnail, "Thumbnail" },
+            { zConfiguration.eLayoutStyle.ContentOnly, "Shared Content" },
+            { zConfiguration.eLayoutStyle.CancelContentOnly, "Cancel Shared Content" },
+            { zConfiguration.eLayoutStyle.Dynamic, "Dynamic Gallery" },
+            { zConfiguration.eLayoutStyle.MultiSpeaker, "Multi-Speaker" },
+            { zConfiguration.eLayoutStyle.ThumbnailAndShare, "Thumbnail & Share" },
+        };
+
         private List<LayoutOption> GetAvailableLayoutOptions()
         {
             var layouts = _codec.AvailableLayouts;
@@ -80,7 +92,7 @@ namespace PepperDash.Essentials.AppServer.Messengers
                 options.Add(new LayoutOption
                 {
                     Command = style.ToString(),
-                    Label = style.ToString()
+                    Label = LayoutDisplayLabels.TryGetValue(style, out var label) ? label : style.ToString()
                 });
             }
 

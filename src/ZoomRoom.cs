@@ -1132,8 +1132,15 @@ namespace PepperDash.Essentials.Plugins
 					}
 				}
 
-				LastSelectedLayout = MapScreenLayoutSourceTypeToLayoutStyle(primaryScreen.Layout);
-				LocalLayoutFeedback.FireUpdate();
+				// SDK quirk: rawLayout reports -1 (None) while Dynamic View is actually engaged (confirmed
+				// live -- selecting "Dynamic" fires rawLayout=-1, not 10), so a None mapping carries no
+				// information here. Don't let it clobber the last known real selection.
+				var mappedCurrentLayout = MapScreenLayoutSourceTypeToLayoutStyle(primaryScreen.Layout);
+				if (mappedCurrentLayout != zConfiguration.eLayoutStyle.None)
+				{
+					LastSelectedLayout = mappedCurrentLayout;
+					LocalLayoutFeedback.FireUpdate();
+				}
 
 				// Compute available layouts from the ctrlInfos (enabled entries).
 				ComputeAvailableLayoutsFromScreenStatus(primaryScreen, e.IsInContentOnly);
