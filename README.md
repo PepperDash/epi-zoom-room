@@ -66,7 +66,7 @@ The plugin registers the following console commands (operator access level):
 | Command | Description |
 |---------|-------------|
 | `pairZoomRoom <activation-code>` | Pair the Zoom Room using the supplied activation code. |
-| `repairZoomRoom` | Reconnect to the last paired Zoom Room using stored credentials. |
+| `repairZoomRoom` | Reconnect to the last paired Zoom Room using stored credentials. Reconnect is normally **automatic** (see Connection watchdog below); this is the manual override. |
 | `unpairZoomRoom` | Unpair from the Zoom Room. |
 | `forceRepairZoom` | Clear stored credentials and re-pair using the activation code from configuration. Use this after rotating the activation code, when stored credentials would otherwise be reused. |
 
@@ -76,3 +76,11 @@ The plugin registers the following console commands (operator access level):
 `CanRecord` reflects the ZRC SDK's `MeetingRecordingInfo.canIRecord` — **whether _this room_ can start recording** (the room's own ability). Because a **host can always record**, `CanRecord` stays `true` while the room is host and **does not track the "Record to computer" switch in Zoom's Host-tools menu**. That switch is a *participant* permission (`RecordingPermissionTypeLocalRecording`) governing whether attendees may record locally — it is not the room's own ability, and the plugin does not currently surface the participant recording-permission states. (Toggling it off while hosting will not change `CanRecord`; this is expected.)
 
 > **Note:** Crestron console command names cannot be a complete prefix of another registered command, so the force re-pair command is named `forceRepairZoom` rather than `repairZoomRoomConfig` (which would collide with `repairZoomRoom`).
+
+### Connection watchdog / auto-repair
+The plugin actively monitors the SDK connection and **self-heals silent/half-open drops** — cases where the network dies without a clean close, leaving the SDK reporting connected while it is actually dead (devcomm would otherwise sit stuck at `IsOk`).
+
+- **Detection:** a 30 s liveness poll plus consecutive command-failure strikes trigger a real `GetMeetingStatus()` probe; a failed probe marks the device offline in devcomm (`InError`).
+- **Repair:** auto-reconnect with escalating backoff (`5 → 10 → 20 → 30 → 60 s`, capped at 60 s) that **never gives up** until the room is reachable again — no program restart or manual `repairZoomRoom` needed.
+
+See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-silent-disconnect.md) for the full write-up (issue, replication, fix, and lab validation).
