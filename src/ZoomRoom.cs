@@ -1006,8 +1006,8 @@ namespace PepperDash.Essentials.Plugins
 				item.Name, _props.MeetingInviteTimeoutMs > 0 ? _props.MeetingInviteTimeoutMs : DefaultMeetingInviteTimeoutMs);
 
 			item.Status = eCodecCallStatus.Disconnected;
-			OnCallStatusChange(item);
 			ActiveCalls.Remove(item);
+			OnCallStatusChange(item);
 			_pendingInviteCall = null;
 		}
 
@@ -1027,8 +1027,8 @@ namespace PepperDash.Essentials.Plugins
 			// clean up when nothing local has touched it yet (accepted=false is the common case here,
 			// but even accepted=true elsewhere means it's no longer "ringing" for this device).
 			item.Status = eCodecCallStatus.Disconnected;
-			OnCallStatusChange(item);
 			ActiveCalls.Remove(item);
+			OnCallStatusChange(item);
 			_pendingInviteCall = null;
 		}
 
@@ -1821,8 +1821,8 @@ namespace PepperDash.Essentials.Plugins
 			if (item != null)
 			{
 				item.Status = eCodecCallStatus.Disconnected;
-				OnCallStatusChange(item);
 				ActiveCalls.Remove(item);
+				OnCallStatusChange(item);
 			}
 			_pendingInviteCall = null;
 		}
