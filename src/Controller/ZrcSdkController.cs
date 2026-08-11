@@ -24,9 +24,19 @@ namespace PepperDash.Essentials.Plugins
         private string _pendingPassword;
         private CTimer _reconnectTimer;
         private int _reconnectAttempt;
-        private const int MaxReconnectAttempts = 10;
         private bool _isConnected;
         private static readonly int[] ReconnectDelaysMs = { 5000, 10000, 20000, 30000, 60000 };
+
+        // Health watchdog: the SDK's connection flag/events can go stale on a silent/half-open drop,
+        // but real command results stay truthful. Count consecutive command failures (while we still
+        // believe we're connected) and probe the link before declaring the room offline.
+        private const int CommandFailureStrikeThreshold = 2;
+        private int _consecutiveCommandFailures;
+        private bool _everConnected;
+        private bool _healthCheckRunning;
+        private readonly object _healthLock = new object();
+
+        public event EventHandler<bool> HealthStateChanged;
 
         public string Key { get; }
 
@@ -217,15 +227,20 @@ namespace PepperDash.Essentials.Plugins
                 if (state == ConnectionState.Disconnected)
                 {
                     _isConnected = false;
+                    _consecutiveCommandFailures = 0;
                     // Disconnect mid-join: ExitMeeting won't fire, so clear any cached password here.
                     _pendingPassword = null;
+                    SafeRaise(() => HealthStateChanged?.Invoke(this, false));
                     ScheduleReconnect();
                 }
                 else if (state == ConnectionState.Connected || state == ConnectionState.Established)
                 {
                     _isConnected = true;
+                    _everConnected = true;
+                    _consecutiveCommandFailures = 0;
                     // Successfully reconnected — cancel any pending retry and reset the counter.
                     CancelReconnect();
+                    SafeRaise(() => HealthStateChanged?.Invoke(this, true));
                 }
                 SafeRaise(() => ConnectionStateChanged?.Invoke(this, e));
             };
@@ -379,14 +394,14 @@ namespace PepperDash.Essentials.Plugins
         // means the C# call didn't throw, not that the SDK acted. Successes log at Debug.
         private int Rc(string op, int code)
         {
-            if (code != 0) this.LogWarning("SDK call {Op} returned error code {Code}", op, code);
-            else this.LogDebug("SDK call {Op} ok", op);
+            if (code != 0) { this.LogWarning("SDK call {Op} returned error code {Code}", op, code); NoteCommandResult(false); }
+            else { this.LogDebug("SDK call {Op} ok", op); NoteCommandResult(true); }
             return code;
         }
         private bool Rc(string op, bool ok)
         {
-            if (!ok) this.LogWarning("SDK call {Op} returned failure", op);
-            else this.LogDebug("SDK call {Op} ok", op);
+            if (!ok) { this.LogWarning("SDK call {Op} returned failure", op); NoteCommandResult(false); }
+            else { this.LogDebug("SDK call {Op} ok", op); NoteCommandResult(true); }
             return ok;
         }
 
@@ -544,22 +559,27 @@ namespace PepperDash.Essentials.Plugins
         private void ScheduleReconnect()
         {
             if (_disposed) return;
+            // A single self-perpetuating loop; extra triggers (SDK event, poll, command failures) no-op.
+            if (_reconnectTimer != null) return;
+            ScheduleNextReconnect();
+        }
+
+        private void ScheduleNextReconnect()
+        {
+            if (_disposed) return;
             if (!_sdk.CanRetryToPairLastRoom())
             {
                 this.LogWarning("Disconnected and no stored pairing credentials — cannot auto-reconnect.");
+                _reconnectTimer?.Dispose();
+                _reconnectTimer = null;
                 return;
             }
 
             _reconnectAttempt++;
-            if (_reconnectAttempt > MaxReconnectAttempts)
-            {
-                this.LogWarning("Auto-reconnect exceeded {Max} attempts — giving up. Use 'repairZoomRoom' to retry.", MaxReconnectAttempts);
-                return;
-            }
-
+            // Escalating backoff for the first few tries, then hold at the max delay indefinitely.
+            // Never give up: an unattended room must self-heal whenever it becomes reachable again.
             var delayMs = ReconnectDelaysMs[Math.Min(_reconnectAttempt - 1, ReconnectDelaysMs.Length - 1)];
-            this.LogInformation("Disconnected — scheduling reconnect attempt {Attempt}/{Max} in {Delay}ms",
-                _reconnectAttempt, MaxReconnectAttempts, delayMs);
+            this.LogInformation("Disconnected — reconnect attempt {Attempt} in {Delay}ms", _reconnectAttempt, delayMs);
 
             _reconnectTimer?.Dispose();
             _reconnectTimer = new CTimer(_ =>
@@ -567,6 +587,9 @@ namespace PepperDash.Essentials.Plugins
                 if (_disposed) return;
                 this.LogInformation("Auto-reconnect attempt {Attempt}: calling RetryToPairRoom()", _reconnectAttempt);
                 _sdk.RetryToPairRoom();
+                // A successful pair fires ConnectionStateChanged(Connected) -> CancelReconnect() stops
+                // this loop. If it didn't (silent failure), keep retrying at the capped delay.
+                if (!_disposed && !_isConnected) ScheduleNextReconnect();
             }, null, delayMs);
         }
 
@@ -575,6 +598,83 @@ namespace PepperDash.Essentials.Plugins
             _reconnectAttempt = 0;
             _reconnectTimer?.Dispose();
             _reconnectTimer = null;
+        }
+
+        // ── Health watchdog ─────────────────────────────────────────────────────
+
+        // Central choke point for every SDK command result (from the Rc helpers). While we believe
+        // we're connected, a run of failures is the signature of a silent/half-open drop, so probe.
+        private void NoteCommandResult(bool success)
+        {
+            if (_disposed) return;
+            if (success) { _consecutiveCommandFailures = 0; return; }
+
+            // Guard() blocks commands when we already know we're offline, so a failure reaching here
+            // means the SDK still reports connected — exactly the stale-state case we want to catch.
+            if (!_isConnected) return;
+
+            _consecutiveCommandFailures++;
+            if (_consecutiveCommandFailures >= CommandFailureStrikeThreshold)
+            {
+                this.LogWarning("{Count} consecutive SDK command failures while marked connected — running health check.", _consecutiveCommandFailures);
+                RunHealthCheck("consecutive command failures");
+            }
+        }
+
+        public void RunHealthCheck(string reason)
+        {
+            // Only guards an established pairing; before the first connect the pairing flow handles it.
+            if (_disposed || !_everConnected) return;
+
+            lock (_healthLock)
+            {
+                if (_healthCheckRunning) return;
+                _healthCheckRunning = true;
+            }
+
+            try
+            {
+                // Real round-trip probe: returns null when the link is actually dead, even if the SDK's
+                // connection flag is stale.
+                var alive = _sdk.GetMeetingStatus().HasValue;
+                if (alive)
+                {
+                    _consecutiveCommandFailures = 0;
+                    if (!_isConnected)
+                    {
+                        // Link recovered without an SDK event — restore online and let the reconnect
+                        // loop's RetryToPairRoom fire a real Connected event for full re-seed.
+                        this.LogInformation("Health probe succeeded while offline ({Reason}) — marking connected.", reason);
+                        _isConnected = true;
+                        SafeRaise(() => HealthStateChanged?.Invoke(this, true));
+                    }
+                    return;
+                }
+
+                this.LogWarning("Health probe failed ({Reason}) — link is down.", reason);
+                DeclareOffline(reason);
+            }
+            catch (Exception ex)
+            {
+                this.LogError(ex, "Exception during health check ({Reason}): {Message}", reason, ex.Message);
+                DeclareOffline(reason);
+            }
+            finally
+            {
+                lock (_healthLock) { _healthCheckRunning = false; }
+            }
+        }
+
+        private void DeclareOffline(string reason)
+        {
+            _consecutiveCommandFailures = 0;
+            if (_isConnected)
+            {
+                _isConnected = false;
+                this.LogWarning("Marking Zoom Room offline ({Reason}); starting auto-repair.", reason);
+                SafeRaise(() => HealthStateChanged?.Invoke(this, false));
+            }
+            ScheduleReconnect();
         }
     }
 }
