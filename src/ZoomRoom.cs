@@ -1159,6 +1159,7 @@ namespace PepperDash.Essentials.Plugins
 		private void OnControllerSharingStatusChanged(object sender, SharingStatusEventArgs e)
 		{
 			_sdkSharingState = e.SharingState;
+			UpdateMeetingInfo();
 			SharingContentIsOnFeedback.FireUpdate();
 			ReceivingContent.FireUpdate();
 			CanSwapContentWithThumbnailFeedback.FireUpdate();
@@ -3443,9 +3444,11 @@ namespace PepperDash.Essentials.Plugins
 			// value != _meetingInfo is always true for a freshly constructed object.
 			var cur = _meetingInfo;
 			var isSharing = _sdkSharingState > 0;
+			var shareStatus = isSharing ? "Sharing" : "None";
 			if (cur != null
 				&& cur.Id == _currentMeetingId
 				&& cur.Name == _currentMeetingName
+				&& cur.ShareStatus == shareStatus
 				&& cur.IsHost == _sdkIsHost
 				&& cur.IsSharingMeeting == isSharing
 				&& cur.IsLocked == _sdkMeetingLocked
@@ -3460,7 +3463,7 @@ namespace PepperDash.Essentials.Plugins
 				_currentMeetingName,
 				string.Empty, // host name: SDK gap — ZrcSdk does not surface a host-name event
 				string.Empty,
-				"None",
+				shareStatus,
 				_sdkIsHost,
 				isSharing,
 				false,
