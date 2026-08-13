@@ -71,6 +71,8 @@ namespace PepperDash.Essentials.Plugins
 		private bool _layoutIsOnLastPage;
 		private int _currentPageVideoType; // PageVideoType (0 = GalleryView)
 		private bool _contentSwappedWithThumbnail;
+		private string _currentVideoOrder = "Default";
+		private string _currentThumbnailsPosition = "Bottom";
 		// Screen layout status, driven by the SDK's ScreenLayoutStatus notification.
 		private ScreenLayoutStatusEventArgs _screenLayoutStatus;
 		// Self-view PiP support/state, driven by the SDK's VideoThumbInfo notification.
@@ -3130,6 +3132,10 @@ namespace PepperDash.Essentials.Plugins
 
 		public zConfiguration.eLayoutStyle AvailableLayouts { get; private set; }
 
+		public string CurrentVideoOrder { get; private set; } = "Default";
+
+		public string CurrentThumbnailsPosition { get; private set; } = "Bottom";
+
 		/// <summary>
 		/// Determines available layouts from SDK ScreenLayoutStatus when available,
 		/// otherwise falls back to reporting all layouts as available.
@@ -3214,6 +3220,62 @@ namespace PepperDash.Essentials.Plugins
 			}
 
 			_controller.SetScreenLayout(0, screenLayoutSourceType); // screen 0 = primary
+		}
+
+		public void SetVideoOrder(string videoOrderCommand)
+		{
+			var normalized = (videoOrderCommand ?? "").Trim();
+			var sdkValue = normalized.ToLowerInvariant() switch
+			{
+				"default" => 0,
+				"alphabetical" => 1,
+				"reversealphabetical" or "reverse alphabetical" => 2,
+				_ => -1,
+			};
+
+			if (sdkValue < 0)
+			{
+				this.LogWarning("SetVideoOrder: unrecognized value '{VideoOrderCommand}' — ignoring", videoOrderCommand);
+				return;
+			}
+
+			_controller.SetVideoOrder(sdkValue);
+			CurrentVideoOrder = normalized.Equals("reversealphabetical", StringComparison.OrdinalIgnoreCase)
+				|| normalized.Equals("reverse alphabetical", StringComparison.OrdinalIgnoreCase)
+					? "ReverseAlphabetical"
+					: normalized.Length > 0 ? char.ToUpperInvariant(normalized[0]) + normalized.Substring(1).ToLowerInvariant() : "Default";
+			if (CurrentVideoOrder.Equals("Alphabetical", StringComparison.Ordinal))
+				CurrentVideoOrder = "Alphabetical";
+			if (CurrentVideoOrder.Equals("Reversealphabetical", StringComparison.Ordinal))
+				CurrentVideoOrder = "ReverseAlphabetical";
+			if (CurrentVideoOrder.Equals("Default", StringComparison.Ordinal))
+				CurrentVideoOrder = "Default";
+
+			OnLayoutInfoChanged();
+		}
+
+		public void SetThumbnailsPosition(string thumbnailsPositionCommand)
+		{
+			var normalized = (thumbnailsPositionCommand ?? "").Trim();
+			var sdkValue = normalized.ToLowerInvariant() switch
+			{
+				"top" => 0,
+				"bottom" => 1,
+				_ => -1,
+			};
+
+			if (sdkValue < 0)
+			{
+				this.LogWarning("SetThumbnailsPosition: unrecognized value '{ThumbnailsPositionCommand}' — ignoring", thumbnailsPositionCommand);
+				return;
+			}
+
+			_controller.ChangeThumbnailsPosition(sdkValue);
+			CurrentThumbnailsPosition = normalized.Length > 0
+				? (normalized.Equals("top", StringComparison.OrdinalIgnoreCase) ? "Top" : "Bottom")
+				: "Bottom";
+
+			OnLayoutInfoChanged();
 		}
 
 		public void SwapContentWithThumbnail()

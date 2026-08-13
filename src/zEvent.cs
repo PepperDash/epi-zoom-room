@@ -22,10 +22,15 @@ namespace PepperDash.Essentials.Plugins
 
         void GetAvailableLayouts(); // Mot sure this is necessary if we're already subscribed to zStatus Call Layout
         void SetLayout(zConfiguration.eLayoutStyle layoutStyle);
+        void SetVideoOrder(string videoOrderCommand);
+        void SetThumbnailsPosition(string thumbnailsPositionCommand);
         void SwapContentWithThumbnail();
 
         void LayoutTurnNextPage();
         void LayoutTurnPreviousPage();
+
+        string CurrentVideoOrder { get; }
+        string CurrentThumbnailsPosition { get; }
     }
 
     public class LayoutInfoChangedEventArgs : EventArgs

@@ -47,6 +47,22 @@ namespace PepperDash.Essentials.AppServer.Messengers
             AddAction("/participantsNextPage", (id, content) => _codec.LayoutTurnNextPage());
             AddAction("/participantsPreviousPage", (id, content) => _codec.LayoutTurnPreviousPage());
             AddAction("/swapContentWithThumbnail", (id, content) => _codec.SwapContentWithThumbnail());
+            AddAction("/setVideoOrder", (id, content) =>
+            {
+                var s = content?.ToObject<MobileControlSimpleContent<string>>();
+                if (string.IsNullOrEmpty(s?.Value))
+                    return;
+
+                _codec.SetVideoOrder(s.Value);
+            });
+            AddAction("/setThumbnailsPosition", (id, content) =>
+            {
+                var s = content?.ToObject<MobileControlSimpleContent<string>>();
+                if (string.IsNullOrEmpty(s?.Value))
+                    return;
+
+                _codec.SetThumbnailsPosition(s.Value);
+            });
 
             _codec.LayoutInfoChanged += (s, e) =>
                 Task.Run(() => PostStatusMessage(new ZoomRoomLayoutsStateMessage { Layouts = BuildLayoutState() }));
@@ -61,7 +77,11 @@ namespace PepperDash.Essentials.AppServer.Messengers
             LayoutViewIsOnFirstPage = _codec.LayoutViewIsOnFirstPageFeedback.BoolValue,
             LayoutViewIsOnLastPage = _codec.LayoutViewIsOnLastPageFeedback.BoolValue,
             CanSwapContentWithThumbnail = _codec.CanSwapContentWithThumbnailFeedback.BoolValue,
-            ContentSwappedWithThumbnail = _codec.ContentSwappedWithThumbnailFeedback.BoolValue
+            ContentSwappedWithThumbnail = _codec.ContentSwappedWithThumbnailFeedback.BoolValue,
+            VideoOrder = _codec.CurrentVideoOrder,
+            AvailableVideoOrders = GetAvailableVideoOrders(),
+            ThumbnailsPosition = _codec.CurrentThumbnailsPosition,
+            AvailableThumbnailsPositions = GetAvailableThumbnailsPositions()
         };
 
         private static readonly Dictionary<zConfiguration.eLayoutStyle, string> LayoutDisplayLabels = new()
@@ -98,6 +118,19 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
             return options;
         }
+
+        private List<LayoutOption> GetAvailableVideoOrders() => new()
+        {
+            new LayoutOption { Command = "Default", Label = "Default" },
+            new LayoutOption { Command = "Alphabetical", Label = "Alphabetical" },
+            new LayoutOption { Command = "ReverseAlphabetical", Label = "Reverse Alphabetical" }
+        };
+
+        private List<LayoutOption> GetAvailableThumbnailsPositions() => new()
+        {
+            new LayoutOption { Command = "Top", Label = "Top" },
+            new LayoutOption { Command = "Bottom", Label = "Bottom" }
+        };
     }
 
     /// <summary>
@@ -128,6 +161,18 @@ namespace PepperDash.Essentials.AppServer.Messengers
 
         [JsonProperty("contentSwappedWithThumbnail", NullValueHandling = NullValueHandling.Ignore)]
         public bool ContentSwappedWithThumbnail { get; set; }
+
+        [JsonProperty("videoOrder", NullValueHandling = NullValueHandling.Ignore)]
+        public string VideoOrder { get; set; }
+
+        [JsonProperty("availableVideoOrders", NullValueHandling = NullValueHandling.Ignore)]
+        public List<LayoutOption> AvailableVideoOrders { get; set; }
+
+        [JsonProperty("thumbnailsPosition", NullValueHandling = NullValueHandling.Ignore)]
+        public string ThumbnailsPosition { get; set; }
+
+        [JsonProperty("availableThumbnailsPositions", NullValueHandling = NullValueHandling.Ignore)]
+        public List<LayoutOption> AvailableThumbnailsPositions { get; set; }
     }
 
     /// <summary>
