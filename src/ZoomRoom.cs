@@ -77,6 +77,9 @@ namespace PepperDash.Essentials.Plugins
 		private ScreenLayoutStatusEventArgs _screenLayoutStatus;
 		// Self-view PiP support/state, driven by the SDK's VideoThumbInfo notification.
 		private bool _sdkSelfviewThumbSupported = true;
+		// Hide-self-video (IHasCodecSelfView on/off) state. The ZRC SDK exposes no query, so this is
+		// plugin-cached and reflects the last SetMyVideoHidden this plugin issued.
+		private bool _selfVideoHidden;
 		// Room speaker (audio output) volume state. Level is the Essentials 0-65535 range.
 		private ushort _sdkSpeakerVolumeLevel;
 		private bool _sdkSpeakerMuted;
@@ -274,12 +277,9 @@ namespace PepperDash.Essentials.Plugins
 
 		protected Func<bool> SelfViewIsOnFeedbackFunc
 		{
-			// Self-view is "on" whenever the PiP size is not Off.
-			get
-			{
-				return () => _currentSelfviewPipSize != null
-				&& !"Off".Equals(_currentSelfviewPipSize.Command, StringComparison.OrdinalIgnoreCase);
-			}
+			// Self-view is "on" when the room's own self video is not hidden (IHasCodecSelfView maps to
+			// the SDK's hide-self-video, which removes the ZR's own tiles from its layout locally).
+			get { return () => !_selfVideoHidden; }
 		}
 
 		protected Func<bool> CameraIsOffFeedbackFunc
@@ -430,17 +430,17 @@ namespace PepperDash.Essentials.Plugins
 
 		public void SelfViewModeOn()
 		{
-			// Restore the last visible PiP size (default Size1); a non-Off size shows the self-view.
-			var size = _lastVisibleSelfviewPipSize
-				?? SelfviewPipSizes.FirstOrDefault(s => s.Command.Equals("Size1", StringComparison.OrdinalIgnoreCase))
-				?? SelfviewPipSizes.FirstOrDefault(s => !s.Command.Equals("Off", StringComparison.OrdinalIgnoreCase));
-			if (size != null) SelfviewPipSizeSet(size);
+			// "On" = self-view visible = not hidden.
+			_controller.SetMyVideoHidden(false);
+			_selfVideoHidden = false;
+			SelfviewIsOnFeedback.FireUpdate();
 		}
 
 		public void SelfViewModeOff()
 		{
-			var off = SelfviewPipSizes.FirstOrDefault(s => s.Command.Equals("Off", StringComparison.OrdinalIgnoreCase));
-			if (off != null) SelfviewPipSizeSet(off);
+			_controller.SetMyVideoHidden(true);
+			_selfVideoHidden = true;
+			SelfviewIsOnFeedback.FireUpdate();
 		}
 
 		public void SelfViewModeToggle()

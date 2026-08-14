@@ -429,6 +429,7 @@ namespace PepperDash.Essentials.Plugins
         // ── Video ─────────────────────────────────────────────────────────────
 
         public bool SetVideoState(bool start)                  => Guard(nameof(SetVideoState)) && Rc(nameof(SetVideoState), _sdk.SetVideoState(start));
+        public bool SetMyVideoHidden(bool hidden)              => Guard(nameof(SetMyVideoHidden)) && Rc(nameof(SetMyVideoHidden), _sdk.SetMyVideoHidden(hidden));
         public bool MuteUserVideo(int userId, bool mute)       => Guard(nameof(MuteUserVideo)) && Rc(nameof(MuteUserVideo), _sdk.MuteUserVideo(userId, mute));
         public bool PinUserOnScreen(int userId, int screenIndex = 0)    => Guard(nameof(PinUserOnScreen)) && Rc(nameof(PinUserOnScreen), _sdk.PinUserOnScreen(userId, screenIndex));
         public bool UnpinUserFromScreen(int userId, int screenIndex = 0) => Guard(nameof(UnpinUserFromScreen)) && Rc(nameof(UnpinUserFromScreen), _sdk.UnpinUserFromScreen(userId, screenIndex));

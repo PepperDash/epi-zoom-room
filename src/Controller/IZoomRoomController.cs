@@ -97,6 +97,10 @@ namespace PepperDash.Essentials.Plugins
         // ── Video ─────────────────────────────────────────────────────────────
 
         bool SetVideoState(bool start);
+
+        /// <summary>Hides or shows the room's own self video locally (does not stop video to the far end).</summary>
+        bool SetMyVideoHidden(bool hidden);
+
         bool MuteUserVideo(int userId, bool mute);
         bool PinUserOnScreen(int userId, int screenIndex = 0);
         bool UnpinUserFromScreen(int userId, int screenIndex = 0);
