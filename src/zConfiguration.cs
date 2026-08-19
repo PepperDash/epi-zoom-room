@@ -69,7 +69,7 @@ namespace PepperDash.Essentials.Plugins
             ContentOnly = 1 << 3,
             CancelContentOnly = 1 << 4,
             Dynamic = 1 << 5,
-            /// <summary>Zoom Room controller UI "Multi-Speaker" layout (SDK ScreenLayoutSourceType.Spotlight).</summary>
+            /// <summary>Zoom Room controller UI "Multi-Speaker" layout (no dedicated SDK ScreenLayoutSourceType; reported/commanded as -1).</summary>
             MultiSpeaker = 1 << 6,
             /// <summary>Zoom Room controller UI "Thumbnail &amp; Share" layout, shown while content is shared (SDK ScreenLayoutSourceType.ThumbnailShareView).</summary>
             ThumbnailAndShare = 1 << 7,

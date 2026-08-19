@@ -18,6 +18,15 @@ namespace PepperDash.Essentials.Plugins
         [JsonProperty("supportsCameraOff")]
         public bool SupportsCameraOff { get; set; }
 
+        /// <summary>
+        /// Whether to offer "Multi-Speaker" as a selectable layout. The ZRC SDK exposes no command to
+        /// enter Multi-Speaker (it maps to ScreenLayoutSourceTypeNone/-1, which SetScreenLayout ignores),
+        /// so the button is a no-op if pressed. Defaults to false (hidden); Multi-Speaker is still
+        /// reported as the current layout when the Zoom controller selects it.
+        /// </summary>
+        [JsonProperty("showMultiSpeakerLayout")]
+        public bool ShowMultiSpeakerLayout { get; set; }
+
         //if true, the layouts will be set automatically when sharing starts/ends or a call is joined
         [JsonProperty("autoDefaultLayouts")]
         public bool AutoDefaultLayouts { get; set; }
