@@ -1257,7 +1257,7 @@ namespace PepperDash.Essentials.Plugins
 		// Layout tracer: logs every layout-helper notification the SDK delivers, for investigating layout behavior.
 		private void OnControllerLayoutDiagnostic(object sender, SdkEventArgs e)
 		{
-			this.LogInformation("LayoutTrace: {Message} (hint={Hint})", e.Message, e.ErrorCode);
+			this.LogDebug("LayoutTrace: {Message} (hint={Hint})", e.Message, e.ErrorCode);
 		}
 
 		/// <summary>
