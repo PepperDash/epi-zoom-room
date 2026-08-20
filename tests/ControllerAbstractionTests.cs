@@ -126,6 +126,7 @@ public class ControllerAbstractionTests
     [Theory]
     [InlineData("SetScreenLayout")]
     [InlineData("SetVideoOrder")]
+    [InlineData("SetDynamicLayoutOption")]
     [InlineData("UpdateVideoLayoutStyle")]
     [InlineData("TurnVideoPage")]
     [InlineData("ChangeThumbnailsPosition")]

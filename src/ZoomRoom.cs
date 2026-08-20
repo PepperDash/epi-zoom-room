@@ -716,6 +716,8 @@ namespace PepperDash.Essentials.Plugins
 			_controller.AirPlayStatusChanged += OnControllerAirPlayStatusChanged;
 			_controller.VideoPageStatusChanged += OnControllerVideoPageStatusChanged;
 			_controller.ScreenLayoutStatusChanged += OnControllerScreenLayoutStatusChanged;
+			_controller.DynamicLayoutOptionChanged += OnControllerDynamicLayoutOptionChanged;
+			_controller.LayoutDiagnostic += OnControllerLayoutDiagnostic;
 			_controller.VideoThumbInfoChanged += OnControllerVideoThumbInfoChanged;
 			_controller.SipCallStatusChanged += OnControllerSipCallStatusChanged;
 			_controller.ContactListChanged += OnControllerContactListChanged;
@@ -1219,9 +1221,9 @@ namespace PepperDash.Essentials.Plugins
 					}
 				}
 
-				// SDK quirk: rawLayout reports -1 (None) while Dynamic View is actually engaged (confirmed
-				// live -- selecting "Dynamic" fires rawLayout=-1, not 10), so a None mapping carries no
-				// information here. Don't let it clobber the last known real selection.
+				// Confirmed live via ScreenLayoutStatus ctrl infos: the controller exposes Multi-Speaker as
+				// a distinct layout whose ScreenLayoutSourceType is -1 (the SDK has no dedicated enum value
+				// for it, so it arrives as None). Dynamic Gallery is the separate DynamicView (10).
 				var mappedCurrentLayout = MapScreenLayoutSourceTypeToLayoutStyle(primaryScreen.Layout);
 				if (mappedCurrentLayout != zConfiguration.eLayoutStyle.None)
 				{
@@ -1242,6 +1244,22 @@ namespace PepperDash.Essentials.Plugins
 			OnLayoutInfoChanged();
 		}
 
+		// DynamicLayoutType last reported by the SDK (SpeakersOnBottom=0/Middle=1/Top=2, Unknown=-1).
+		// On single-screen rooms this sub-option distinguishes Dynamic Gallery from Multi-Speaker.
+		private int _dynamicLayoutOption = -1;
+
+		private void OnControllerDynamicLayoutOptionChanged(object sender, SdkEventArgs e)
+		{
+			_dynamicLayoutOption = e.ErrorCode;
+			this.LogInformation("DynamicLayoutOption changed: {DynamicLayoutOption} (SpeakersOnBottom=0/Middle=1/Top=2)", _dynamicLayoutOption);
+		}
+
+		// Layout tracer: logs every layout-helper notification the SDK delivers, for investigating layout behavior.
+		private void OnControllerLayoutDiagnostic(object sender, SdkEventArgs e)
+		{
+			this.LogDebug("LayoutTrace: {Message} (hint={Hint})", e.Message, e.ErrorCode);
+		}
+
 		/// <summary>
 		/// Maps SDK ScreenLayoutSourceType int to the Essentials eLayoutStyle enum.
 		/// </summary>
@@ -1251,16 +1269,16 @@ namespace PepperDash.Essentials.Plugins
 			// Spotlight=3, Gallery=4, SharedContent=5, Background=6, LocalView=7,
 			// ImmersiveView=8, ZoomAppsView=9, DynamicView=10, ThumbnailView=11, ThumbnailShareView=12
 			//
-			// Confirmed live: selecting "Multi-Speaker" on the controller UI fires rawLayout=10 (DynamicView),
-			// the same value as "Dynamic Gallery" -- the SDK exposes no distinct raw type for Multi-Speaker.
-			// This returns the single canonical value for "currently selected layout" purposes; the
-			// MultiSpeaker flag is added separately in ComputeAvailableLayoutsFromScreenStatus below.
+			// Confirmed live via ScreenLayoutStatus ctrl infos: Dynamic Gallery = DynamicView (10) and
+			// Multi-Speaker = -1 (the SDK exposes no dedicated ScreenLayoutSourceType for Multi-Speaker,
+			// so it reports as None/-1). These are distinct, separately-selectable layouts.
 			return screenLayoutSourceType switch
 			{
+				-1 => zConfiguration.eLayoutStyle.MultiSpeaker,     // No dedicated SDK type -- controller's "Multi-Speaker"
 				0 => zConfiguration.eLayoutStyle.Speaker,           // ActiveVideo = single active-speaker view
 				4 => zConfiguration.eLayoutStyle.Gallery,           // Gallery
 				5 => zConfiguration.eLayoutStyle.ContentOnly,       // SharedContent = "Shared Content"
-				10 => zConfiguration.eLayoutStyle.Dynamic,          // DynamicView = "Dynamic Gallery" / "Multi-Speaker"
+				10 => zConfiguration.eLayoutStyle.Dynamic,          // DynamicView = "Dynamic Gallery"
 				11 => zConfiguration.eLayoutStyle.Thumbnail,        // ThumbnailView
 				12 => zConfiguration.eLayoutStyle.ThumbnailAndShare, // ThumbnailShareView = "Thumbnail & Share"
 				_ => zConfiguration.eLayoutStyle.None,
@@ -1280,13 +1298,13 @@ namespace PepperDash.Essentials.Plugins
 			{
 				if (!ctrl.Enable) continue;
 				var mapped = MapScreenLayoutSourceTypeToLayoutStyle(ctrl.Layout);
-				if (mapped != zConfiguration.eLayoutStyle.None)
-					available |= mapped;
+				if (mapped == zConfiguration.eLayoutStyle.None)
+					continue;
+				// Multi-Speaker can't be commanded via the SDK (maps to None/-1); hide the button unless opted in.
+				if (mapped == zConfiguration.eLayoutStyle.MultiSpeaker && !_props.ShowMultiSpeakerLayout)
+					continue;
+				available |= mapped;
 			}
-
-			// Multi-Speaker shares Dynamic's raw type (10) -- see MapScreenLayoutSourceTypeToLayoutStyle.
-			if (available.HasFlag(zConfiguration.eLayoutStyle.Dynamic))
-				available |= zConfiguration.eLayoutStyle.MultiSpeaker;
 
 			// CancelContentOnly is only meaningful while the SDK reports we're actually IN content-only
 			// mode -- ContentOnly being an available *destination* doesn't mean there's anything to cancel.
@@ -3211,8 +3229,8 @@ namespace PepperDash.Essentials.Plugins
 				case zConfiguration.eLayoutStyle.Speaker: screenLayoutSourceType = 0; break;           // ActiveVideo
 				case zConfiguration.eLayoutStyle.Gallery: screenLayoutSourceType = 4; break;            // Gallery
 				case zConfiguration.eLayoutStyle.ContentOnly: screenLayoutSourceType = 5; break;        // SharedContent
-				case zConfiguration.eLayoutStyle.Dynamic:
-				case zConfiguration.eLayoutStyle.MultiSpeaker: screenLayoutSourceType = 10; break;      // DynamicView -- confirmed live: also fires for the controller UI's "Multi-Speaker"
+				case zConfiguration.eLayoutStyle.Dynamic: screenLayoutSourceType = 10; break;           // DynamicView = "Dynamic Gallery"
+				case zConfiguration.eLayoutStyle.MultiSpeaker: screenLayoutSourceType = -1; break;      // No dedicated SDK type -- controller's "Multi-Speaker" (confirmed live via ctrl infos)
 				case zConfiguration.eLayoutStyle.Thumbnail: screenLayoutSourceType = 11; break;         // ThumbnailView
 				case zConfiguration.eLayoutStyle.ThumbnailAndShare: screenLayoutSourceType = 12; break; // ThumbnailShareView
 				default:
@@ -3258,10 +3276,11 @@ namespace PepperDash.Essentials.Plugins
 		public void SetThumbnailsPosition(string thumbnailsPositionCommand)
 		{
 			var normalized = (thumbnailsPositionCommand ?? "").Trim();
+			// SDK ThumbnailsPositionType: Bottom = 0, Top = 1.
 			var sdkValue = normalized.ToLowerInvariant() switch
 			{
-				"top" => 0,
-				"bottom" => 1,
+				"top" => 1,
+				"bottom" => 0,
 				_ => -1,
 			};
 

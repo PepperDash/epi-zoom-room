@@ -292,6 +292,8 @@ namespace PepperDash.Essentials.Plugins
             _sdk.AirPlayStatusChanged    += (s, e) => SafeRaise(() => AirPlayStatusChanged?.Invoke(this, e));
             _sdk.VideoPageStatusChanged  += (s, e) => SafeRaise(() => VideoPageStatusChanged?.Invoke(this, e));
             _sdk.ScreenLayoutStatusChanged += (s, e) => SafeRaise(() => ScreenLayoutStatusChanged?.Invoke(this, e));
+            _sdk.DynamicLayoutOptionChanged += (s, e) => SafeRaise(() => DynamicLayoutOptionChanged?.Invoke(this, e));
+            _sdk.LayoutDiagnostic += (s, e) => SafeRaise(() => LayoutDiagnostic?.Invoke(this, e));
             _sdk.VideoThumbInfoChanged   += (s, e) => SafeRaise(() => VideoThumbInfoChanged?.Invoke(this, e));
             _sdk.SIPCallStatus           += (s, e) => SafeRaise(() => SipCallStatusChanged?.Invoke(this, e));
             _sdk.ControlSystemEnabled    += (s, e) => SafeRaise(() => ZrcsEnabledChanged?.Invoke(this, e));
@@ -447,6 +449,7 @@ namespace PepperDash.Essentials.Plugins
 
         public int SetScreenLayout(int screen, int layoutSourceType) => Guard(nameof(SetScreenLayout)) ? Rc(nameof(SetScreenLayout), _sdk.SetScreenLayout(screen, layoutSourceType)) : -1;
         public int SetVideoOrder(int videoOrderType)                 => Guard(nameof(SetVideoOrder)) ? Rc(nameof(SetVideoOrder), _sdk.SetVideoOrder(videoOrderType)) : -1;
+        public int SetDynamicLayoutOption(int layout)                => Guard(nameof(SetDynamicLayoutOption)) ? Rc(nameof(SetDynamicLayoutOption), _sdk.SetDynamicLayoutOption(layout)) : -1;
         public int UpdateVideoLayoutStyle(int videoLayoutStyle)      => Guard(nameof(UpdateVideoLayoutStyle)) ? Rc(nameof(UpdateVideoLayoutStyle), _sdk.UpdateVideoLayoutStyle(videoLayoutStyle)) : -1;
         public int ControlVideoPosition(int position, int size)      => Guard(nameof(ControlVideoPosition)) ? Rc(nameof(ControlVideoPosition), _sdk.ControlVideoPosition(position, size)) : -1;
         public int TurnVideoPage(bool forward, int pageVideoType)    => Guard(nameof(TurnVideoPage)) ? Rc(nameof(TurnVideoPage), _sdk.TurnVideoPage(forward, pageVideoType)) : -1;
@@ -532,6 +535,8 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<AirPlayStatusEventArgs> AirPlayStatusChanged;
         public event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         public event EventHandler<ScreenLayoutStatusEventArgs> ScreenLayoutStatusChanged;
+        public event EventHandler<SdkEventArgs> DynamicLayoutOptionChanged;
+        public event EventHandler<SdkEventArgs> LayoutDiagnostic;
         public event EventHandler<VideoThumbInfoEventArgs> VideoThumbInfoChanged;
         public event EventHandler<SIPCall> SipCallStatusChanged;
         public event EventHandler<SdkEventArgs> ZrcsEnabledChanged;

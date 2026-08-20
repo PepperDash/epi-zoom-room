@@ -135,6 +135,9 @@ namespace PepperDash.Essentials.Plugins
         int SetScreenLayout(int screen, int layoutSourceType);
         int SetVideoOrder(int videoOrderType);
 
+        /// <summary>Sets the dynamic-layout sub-option within Dynamic View (DynamicLayoutType: SpeakersOnBottom=0/Middle=1/Top=2). On single-screen rooms this distinguishes Dynamic Gallery from Multi-Speaker.</summary>
+        int SetDynamicLayoutOption(int layout);
+
         /// <summary>Sets the meeting video layout style (VideoLayoutStyle: Gallery=1, Speaker=2, Thumbnail=3, ContentOnly=4, DynamicLayout=6). Distinct from SetVideoOrder, which only reorders tiles.</summary>
         int UpdateVideoLayoutStyle(int videoLayoutStyle);
 
@@ -262,6 +265,8 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<AirPlayStatusEventArgs> AirPlayStatusChanged;
         event EventHandler<VideoPageStatusEventArgs> VideoPageStatusChanged;
         event EventHandler<ScreenLayoutStatusEventArgs> ScreenLayoutStatusChanged;
+        event EventHandler<SdkEventArgs> DynamicLayoutOptionChanged;
+        event EventHandler<SdkEventArgs> LayoutDiagnostic;
         event EventHandler<VideoThumbInfoEventArgs> VideoThumbInfoChanged;
         event EventHandler<SIPCall> SipCallStatusChanged;
         event EventHandler<SdkEventArgs> ZrcsEnabledChanged;
