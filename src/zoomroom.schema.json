@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pepperdash.com/schemas/epi-zoom-room/zoomroom.schema.json",
+  "title": "zoomroom",
+  "description": "Device config entry for a device of type \"zoomroom\". Properties object for a device of type \"zoomroom\", backed by ZoomRoomPropertiesConfig (ZoomRoomPropertiesConfig.cs).",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Unique identifier for this device within the configuration file."
+    },
+    "name": {
+      "type": "string",
+      "description": "Friendly display name for this device."
+    },
+    "type": {
+      "const": "zoomroom",
+      "description": "Discriminator identifying the plugin factory that instantiates this device."
+    },
+    "properties": {
+      "$ref": "#/$defs/properties",
+      "description": "Properties object for a device of type \"zoomroom\", backed by ZoomRoomPropertiesConfig (ZoomRoomPropertiesConfig.cs)."
+    }
+  },
+  "required": [
+    "key",
+    "name",
+    "type",
+    "properties"
+  ],
+  "$defs": {
+    "properties": {
+      "type": "object",
+      "properties": {
+        "communicationMonitorProperties": {
+          "type": "object",
+          "description": "Kept for back-compat but is no longer used - the ZRC SDK is event-driven and requires no polling.",
+          "properties": {
+            "pollInterval": {
+              "type": "integer"
+            },
+            "timeToWarning": {
+              "type": "integer"
+            },
+            "timeToError": {
+              "type": "integer"
+            },
+            "pollString": {
+              "type": "string"
+            }
+          }
+        },
+        "disablePhonebookAutoDownload": {
+          "type": "boolean"
+        },
+        "supportsCameraAutoMode": {
+          "type": "boolean"
+        },
+        "supportsCameraOff": {
+          "type": "boolean"
+        },
+        "showMultiSpeakerLayout": {
+          "type": "boolean",
+          "description": "Whether to offer \"Multi-Speaker\" as a selectable layout. The ZRC SDK exposes no command to enter Multi-Speaker, so the button is a no-op if pressed. Defaults to false (hidden)."
+        },
+        "autoDefaultLayouts": {
+          "type": "boolean",
+          "description": "If true, the layouts will be set automatically when sharing starts/ends or a call is joined."
+        },
+        "defaultSharingLayout": {
+          "$ref": "#/$defs/layoutStyle",
+          "description": "Layout selected when Sharing starts (either from far end or locally)."
+        },
+        "defaultCallLayout": {
+          "$ref": "#/$defs/layoutStyle",
+          "description": "Layout selected when a call is connected and no content is being shared."
+        },
+        "minutesBeforeMeetingStart": {
+          "type": "integer"
+        },
+        "meetingInviteTimeoutMs": {
+          "type": "integer",
+          "description": "How long (ms) a ringing meeting invite is allowed to sit unanswered before it's dropped from ActiveCalls. Defaults to 45000 (45s) when unset/0."
+        },
+        "activationCode": {
+          "type": "string",
+          "description": "Zoom Room pairing/activation code."
+        },
+        "phoneDialMode": {
+          "type": "string",
+          "default": "Sip",
+          "description": "How DialPhoneCall places outbound calls. Sip (default) uses the SDK's SIP phone service; Pstn is not yet implemented. Case-insensitive.",
+          "pattern": "^(?:[sS][iI][pP]|[pP][sS][tT][nN])(?:\\s*,\\s*(?:[sS][iI][pP]|[pP][sS][tT][nN]))*$"
+        },
+        "sdkConfigPath": {
+          "type": "string",
+          "default": "/user/zrcsdk",
+          "description": "Path passed to ZrcSdk.Initialize()."
+        }
+      }
+    },
+    "layoutStyle": {
+      "type": "string",
+      "description": "Zoom Room Controller layout style (bit-flag enum; a single value is typically used per field). Case-insensitive.",
+      "pattern": "^(?:[nN][oO][nN][eE]|[gG][aA][lL][lL][eE][rR][yY]|[sS][pP][eE][aA][kK][eE][rR]|[tT][hH][uU][mM][bB][nN][aA][iI][lL]|[cC][oO][nN][tT][eE][nN][tT][oO][nN][lL][yY]|[cC][aA][nN][cC][eE][lL][cC][oO][nN][tT][eE][nN][tT][oO][nN][lL][yY]|[dD][yY][nN][aA][mM][iI][cC]|[mM][uU][lL][tT][iI][sS][pP][eE][aA][kK][eE][rR]|[tT][hH][uU][mM][bB][nN][aA][iI][lL][aA][nN][dD][sS][hH][aA][rR][eE])(?:\\s*,\\s*(?:[nN][oO][nN][eE]|[gG][aA][lL][lL][eE][rR][yY]|[sS][pP][eE][aA][kK][eE][rR]|[tT][hH][uU][mM][bB][nN][aA][iI][lL]|[cC][oO][nN][tT][eE][nN][tT][oO][nN][lL][yY]|[cC][aA][nN][cC][eE][lL][cC][oO][nN][tT][eE][nN][tT][oO][nN][lL][yY]|[dD][yY][nN][aA][mM][iI][cC]|[mM][uU][lL][tT][iI][sS][pP][eE][aA][kK][eE][rR]|[tT][hH][uU][mM][bB][nN][aA][iI][lL][aA][nN][dD][sS][hH][aA][rR][eE]))*$"
+    }
+  }
+}
