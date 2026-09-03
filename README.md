@@ -70,6 +70,26 @@ The plugin registers the following console commands (operator access level):
 | `unpairZoomRoom` | Unpair from the Zoom Room. |
 | `forceRepairZoom` | Clear stored credentials and re-pair using the activation code from configuration. Use this after rotating the activation code, when stored credentials would otherwise be reused. |
 
+## Commissioning: pairing a new system
+
+Every Zoom Room resource must be paired with Zoom's cloud once, using a one-time **activation code**, before the plugin can log in and start reporting meeting status. Follow this procedure when commissioning a system for the first time.
+
+1. **Generate the activation code in Zoom.** In the Zoom web portal, go to **Room Management > Zoom Rooms**, select (or add) the Room resource for this system, and generate an activation code from its **Room Profile > Edit / Activate** page. The code is single-use and expires after a short window (check the portal for the exact expiration), so generate it right before you're ready to pair.
+2. **Pair the room.** Choose one of the following:
+    - **Recommended for first-time commissioning:** at the processor console, run:
+      ```
+      pairZoomRoom <activation-code>
+      ```
+      This pairs immediately without requiring a program restart or a config change.
+    - **Alternative:** set `activationCode` in the device's `properties` block in the configuration file, then load/restart the program. On startup, if there are no stored pairing credentials yet, the plugin automatically calls `PairRoomWithActivationCode` using the configured value.
+3. **Verify pairing succeeded.** Watch the console/error log for the pairing result. Once paired, the room can be confirmed via the SDK connection state or by checking meeting status.
+4. **Re-pairing after a factory reset or activation code rotation.** Stored credentials are reused automatically on every subsequent startup/reconnect (see Connection watchdog below), so a fresh activation code is only needed if the room was unpaired, or Zoom invalidated/rotated the credentials. In that case:
+    - Generate a new activation code in the Zoom portal as in step 1.
+    - Run `pairZoomRoom <new-activation-code>` to pair with the new code directly, **or**
+    - Update `activationCode` in configuration and run `forceRepairZoom`, which clears the stale stored credentials and re-pairs using the newly configured code.
+
+> **Note:** Leaving `activationCode` in configuration after initial commissioning is harmless — it is only consulted when there are no stored credentials (first boot) or when `forceRepairZoom` is invoked explicitly.
+
 ## Behavior notes
 
 ### `MeetingInfo.CanRecord`
