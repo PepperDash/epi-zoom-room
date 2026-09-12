@@ -30,7 +30,7 @@ namespace PepperDash.Essentials.Plugins
 		IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
 		IHasFarEndContentStatus, IHasSelfviewPosition, IHasPhoneDialing, IHasZoomRoomLayouts, IHasParticipantPinUnpin,
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
-		IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback
+		IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback, IHasWebView
 	{
 #pragma warning disable CS0067 // Required by IHasCameraMuteWithUnmuteReqeust; never raised because Zoom Room SDK handles video state directly
 		public event EventHandler VideoUnmuteRequested;
@@ -3580,6 +3580,34 @@ namespace PepperDash.Essentials.Plugins
 			{
 				LockMeeting();
 			}
+		}
+
+		#endregion
+
+		#region IHasWebView Members
+
+		// Tracked locally: ZRCS exposes no open/closed feedback, so this reflects our own calls only.
+		private bool _webviewIsVisible;
+
+		public bool WebviewIsVisible => _webviewIsVisible;
+
+		public event EventHandler<WebViewStatusChangedEventArgs> WebViewStatusChanged;
+
+		/// <summary>Opens the ZRCS room controls panel. ZRCS has no notion of which page to open —
+		/// the URL is configured in the Zoom admin portal — so url/mode/title/target are ignored.</summary>
+		public void ShowWebView(string url, string mode, string title, string target)
+		{
+			if (!_controller.OpenRoomControls(true)) return;
+			_webviewIsVisible = true;
+			WebViewStatusChanged?.Invoke(this, new WebViewStatusChangedEventArgs("Fullscreen"));
+		}
+
+		/// <summary>Closes the ZRCS room controls panel — the custom interface's exit (X).</summary>
+		public void HideWebView()
+		{
+			if (!_controller.OpenRoomControls(false)) return;
+			_webviewIsVisible = false;
+			WebViewStatusChanged?.Invoke(this, new WebViewStatusChangedEventArgs("Cleared"));
 		}
 
 		#endregion

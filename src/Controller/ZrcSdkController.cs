@@ -388,6 +388,7 @@ namespace PepperDash.Essentials.Plugins
         public bool CancelEnteringMeetingPassword()         => Guard(nameof(CancelEnteringMeetingPassword)) && Rc(nameof(CancelEnteringMeetingPassword), _sdk.CancelEnteringMeetingPassword());
         public bool CancelWaitingForHost()                  => Guard(nameof(CancelWaitingForHost)) && Rc(nameof(CancelWaitingForHost), _sdk.CancelWaitingForHost());
         public bool LockMeeting(bool locked)                => Guard(nameof(LockMeeting)) && Rc(nameof(LockMeeting), _sdk.LockMeeting(locked));
+        public bool OpenRoomControls(bool open)             => Guard(nameof(OpenRoomControls)) && Rc(nameof(OpenRoomControls), _sdk.OpenRoomControls(open));
 
         // ── SDK call result logging ─────────────────────────────────────────────
         // The SDK returns a ZRCSDKError (0 = success) or a bool; ZoomRoom otherwise discards it.

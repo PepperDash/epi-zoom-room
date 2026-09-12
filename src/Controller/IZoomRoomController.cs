@@ -235,6 +235,10 @@ namespace PepperDash.Essentials.Plugins
 
         bool IsZrcsEnabled();
 
+        /// <summary>Opens or closes the ZRCS room controls panel — the surface a custom interface
+        /// is presented in. Closing it returns the controller to its home screen.</summary>
+        bool OpenRoomControls(bool open);
+
         // ── Events ───────────────────────────────────────────────────────────
 
         event EventHandler<SdkEventArgs> Initialized;
