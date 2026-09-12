@@ -104,3 +104,348 @@ The plugin actively monitors the SDK connection and **self-heals silent/half-ope
 - **Repair:** auto-reconnect with escalating backoff (`5 → 10 → 20 → 30 → 60 s`, capped at 60 s) that **never gives up** until the room is reachable again — no program restart or manual `repairZoomRoom` needed.
 
 See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-silent-disconnect.md) for the full write-up (issue, replication, fix, and lab validation).
+<!-- START Minimum Essentials Framework Versions -->
+### Minimum Essentials Framework Versions
+
+- 3.0.0
+<!-- END Minimum Essentials Framework Versions -->
+<!-- START Config Example -->
+### Config Example
+
+```json
+{
+    "key": "GeneratedKey",
+    "uid": 1,
+    "name": "GeneratedName",
+    "type": "ZoomRoomProperties",
+    "group": "Group",
+    "properties": {
+        "communicationMonitorProperties": "SampleValue",
+        "disablePhonebookAutoDownload": true,
+        "supportsCameraAutoMode": true,
+        "supportsCameraOff": true,
+        "showMultiSpeakerLayout": true,
+        "autoDefaultLayouts": true,
+        "minutesBeforeMeetingStart": 0,
+        "meetingInviteTimeoutMs": 0,
+        "activationCode": "SampleString",
+        "phoneDialMode": "SampleValue",
+        "sdkConfigPath": "SampleString"
+    }
+}
+```
+<!-- END Config Example -->
+<!-- START Supported Types -->
+
+<!-- END Supported Types -->
+<!-- START Join Maps -->
+
+<!-- END Join Maps -->
+<!-- START Interfaces Implemented -->
+### Interfaces Implemented
+
+- IAmFarEndCamera
+- IHasCameraPtzControl
+- IHasCameraControls
+- IBridgeAdvanced
+- IHasCodecSelfView
+- IHasDirectoryHistoryStack
+- ICommunicationMonitor
+- IHasScheduleAwareness
+- IHasCodecCameras
+- IHasParticipants
+- IHasCameraOff
+- IHasCameraMuteWithUnmuteReqeust
+- IHasCameraAutoMode
+- IHasFarEndContentStatus
+- IHasSelfviewPosition
+- IHasPhoneDialing
+- IHasZoomRoomLayouts
+- IHasParticipantPinUnpin
+- IHasParticipantAudioMute
+- IHasSelfviewSize
+- IPasswordPrompt
+- IHasStartMeeting
+- IHasMeetingInfo
+- IHasPresentationOnlyMeeting
+- IHasMeetingLock
+- IHasMeetingRecordingWithPrompt
+- IZoomWirelessShareInstructions
+- IHasCodecRoomPresets
+- IRoutingSinkWithFeedback
+- IHasWebView
+- INotifyPropertyChanged
+- IZoomRoomController
+- IKeyed
+<!-- END Interfaces Implemented -->
+<!-- START Base Classes -->
+### Base Classes
+
+- ZoomRoomCamera
+- CameraBase
+- VideoCodecBase
+- VideoCodecControllerJoinMap
+- EventArgs
+- NotifiableObject
+- VideoCodecInfo
+- StatusMonitorBase
+- MessengerBase
+- SelfviewOptionMessengerBase
+<!-- END Base Classes -->
+<!-- START Public Methods -->
+### Public Methods
+
+- public void Factory_Source_Sets_MinimumEssentialsFrameworkVersion_To_3(string factoryClassName)
+- public void Factory_Source_Assigns_TypeNames(string factoryClassName)
+- public void Factory_Source_Contains_TypeName(string factoryClassName, string typeName)
+- public void No_Duplicate_TypeNames_Across_Factories()
+- public void IZoomRoomController_Exists_In_Assembly()
+- public void IZoomRoomController_Is_Interface()
+- public void IZoomRoomController_Extends_IDisposable()
+- public void IZoomRoomController_Has_Lifecycle_Method(string methodName)
+- public void IZoomRoomController_Has_Meeting_Method(string methodName)
+- public void IZoomRoomController_Has_Audio_Method(string methodName)
+- public void IZoomRoomController_Has_Video_Method(string methodName)
+- public void IZoomRoomController_Has_Layout_Method(string methodName)
+- public void IZoomRoomController_Has_Share_Method(string methodName)
+- public void IZoomRoomController_Has_Recording_Method(string methodName)
+- public void IZoomRoomController_Has_Participant_Method(string methodName)
+- public void IZoomRoomController_Has_WaitingRoom_Method(string methodName)
+- public void IZoomRoomController_Has_Phone_Method(string methodName)
+- public void IZoomRoomController_Has_Contacts_Method(string methodName)
+- public void IZoomRoomController_Has_ListMeeting_Method()
+- public void IZoomRoomController_CommandMethod_Returns_Bool(string methodName)
+- public void IZoomRoomController_GetConnectionState_Returns_Int()
+- public void IZoomRoomController_Has_SdkEvent(string eventName)
+- public void IZoomRoomController_Has_ParticipantEvent(string eventName)
+- public void IZoomRoomController_Has_SharingStatusChanged_Event()
+- public void IZoomRoomController_Has_VideoPageStatusChanged_Event()
+- public void IZoomRoomController_Has_ContactListChanged_Event()
+- public void IZoomRoomController_Has_MeetingListChanged_Event()
+- public void IZoomRoomController_Has_MeetingRecordingInfoChanged_Event()
+- public void IZoomRoomController_Has_JoinMeeting_Overload_Without_Password()
+- public void IZoomRoomController_Has_JoinMeetingWithPassword_Overload()
+- public void IZoomRoomController_Has_SendMeetingPassword()
+- public void IZoomRoomController_Has_MeetingNeedsPassword_Event()
+- public void ZoomRoomPropertiesConfig_Exists_In_Assembly()
+- public void ZoomRoomPropertiesConfig_Has_Parameterless_Constructor()
+- public void ZoomRoomPropertiesConfig_Property_Has_JsonPropertyAttribute(string jsonName)
+- public void Assembly_Loads_Successfully()
+- public void Assembly_Name_Matches_Expected()
+- public void Factory_Count_Matches_Expected()
+- public void Factory_Exists_ByName(string factoryClassName)
+- public void All_Factories_Have_Parameterless_Constructor()
+- public void PositionHome()
+- public void PanLeft()
+- public void PanRight()
+- public void PanStop()
+- public void TiltDown()
+- public void TiltUp()
+- public void TiltStop()
+- public void ZoomIn()
+- public void ZoomOut()
+- public void ZoomStop()
+- public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+- public void SelectCamera(string key)
+- public void GetSelfViewMode()
+- public void SelfViewModeOn()
+- public void SelfViewModeOff()
+- public void SelfViewModeToggle()
+- public void SearchDirectory(string searchString)
+- public void GetDirectoryFolderContents(string folderId)
+- public void SetCurrentDirectoryToRoot()
+- public void GetDirectoryParentFolderContents()
+- public void GetSchedule()
+- public void ExecuteSwitch(object inputSelector, object outputSelector, eRoutingSignalType signalType)
+- public void SetCurrentSource(eRoutingSignalType signalType, IRoutingSource sourceDevice)
+- public void VolumeSetToDefault()
+- public void LinkZoomRoomToApi(BasicTriList trilist, ZoomRoomJoinMap joinMap)
+- public void AcceptCall()
+- public void RejectCall()
+- public void InviteContactsToNewMeeting(List<InvitableDirectoryContact> contacts, uint duration)
+- public void InviteContactsToExistingMeeting(List<InvitableDirectoryContact> contacts)
+- public void LogDirectory()
+- public void InviteContactById(string contactId)
+- public void StartMeeting(uint duration)
+- public void LeaveMeeting()
+- public void EndMeetingForAll()
+- public void RemoveParticipant(int userId)
+- public void SetParticipantAsHost(int userId)
+- public void AdmitParticipantFromWaitingRoom(int userId)
+- public void AdmitAllParticipantsFromWaitingRoom()
+- public void PutParticipantInWaitingRoom(int userId)
+- public void RemoveAllFromWaitingRoom()
+- public void CodecRoomPresetSelect(int preset)
+- public void CodecRoomPresetStore(int preset, string description)
+- public void SelectFarEndPreset(int preset)
+- public void LogWaitingRoom()
+- public void LogParticipants()
+- public void LogMeetingInfo()
+- public void LogVolume()
+- public void MuteAudioForAllParticipants()
+- public void MuteAudioForParticipant(int userId)
+- public void UnmuteAudioForParticipant(int userId)
+- public void ToggleAudioForParticipant(int userId)
+- public void MuteVideoForParticipant(int userId)
+- public void UnmuteVideoForParticipant(int userId)
+- public void ToggleVideoForParticipant(int userId)
+- public void PinParticipant(int userId, int screenIndex)
+- public void UnPinParticipant(int userId)
+- public void ToggleParticipantPinState(int userId, int screenIndex)
+- public void CameraOff()
+- public void CameraMuteOn()
+- public void CameraMuteOff()
+- public void CameraMuteToggle()
+- public void CameraAutoModeOn()
+- public void CameraAutoModeOff()
+- public void CameraAutoModeToggle()
+- public void SelfviewPipPositionSet(CodecCommandWithLabel position)
+- public void SelfviewPipPositionToggle()
+- public void SelfviewPipSizeSet(CodecCommandWithLabel size)
+- public void SelfviewPipSizeToggle()
+- public void DialPhoneCall(string number)
+- public void EndPhoneCall()
+- public void SendDtmfToPhone(string digit)
+- public void GetAvailableLayouts()
+- public void SetLayout(zConfiguration.eLayoutStyle layoutStyle)
+- public void SetVideoOrder(string videoOrderCommand)
+- public void SetThumbnailsPosition(string thumbnailsPositionCommand)
+- public void SwapContentWithThumbnail()
+- public void LayoutTurnNextPage()
+- public void LayoutTurnPreviousPage()
+- public void LocalLayoutToggle()
+- public void LocalLayoutToggleSingleProminent()
+- public void MinMaxLayoutToggle()
+- public void SubmitPassword(string password)
+- public void StartSharingOnlyMeeting()
+- public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode)
+- public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration)
+- public void StartSharingOnlyMeeting(eSharingMeetingMode displayMode, uint duration, string password)
+- public void StartNormalMeetingFromSharingOnlyMeeting()
+- public void ShowShareInstruction(eSharingMeetingMode mode)
+- public void DismissShareInstruction()
+- public void LockMeeting()
+- public void UnLockMeeting()
+- public void ToggleMeetingLock()
+- public void ShowWebView(string url, string mode, string title, string target)
+- public void HideWebView()
+- public void RecordingPromptAcknowledgement(bool agree)
+- public void StartRecording()
+- public void StopRecording()
+- public void ToggleRecording()
+- public bool Initialize(string configPath)
+- public int GetConnectionState()
+- public bool PairWithActivationCode(string activationCode)
+- public bool CanRetryPair()
+- public bool RetryPair()
+- public bool Unpair()
+- public bool RepairWithConfiguredCode()
+- public bool WakeUp()
+- public bool Logout()
+- public bool RestartOs()
+- public bool StartMeeting(string meetingNumber)
+- public bool StartInstantMeeting()
+- public bool StartMeetingWithHostKey(string hostKey)
+- public bool JoinMeeting(string meetingNumber)
+- public bool JoinMeetingWithPassword(string meetingNumber, string password)
+- public bool JoinMeetingWithUrl(string url)
+- public bool EndMeeting()
+- public bool LeaveMeeting()
+- public bool AnswerMeetingInvite(bool accept)
+- public bool SendMeetingPassword(string password)
+- public bool CancelEnteringMeetingPassword()
+- public bool CancelWaitingForHost()
+- public bool LockMeeting(bool locked)
+- public bool OpenRoomControls(bool open)
+- public bool SetAudioMute(bool mute)
+- public bool MuteUserAudio(int userId, bool mute)
+- public bool MuteAllAudio(bool mute)
+- public bool SetMuteOnEntry(bool mute)
+- public bool AnswerUnmuteRequest(bool accepted)
+- public bool AllowAttendeesUnmute(bool allow)
+- public bool SetSpeakerVolume(float volume)
+- public float GetSpeakerVolume()
+- public bool SetVideoState(bool start)
+- public bool SetMyVideoHidden(bool hidden)
+- public bool MuteUserVideo(int userId, bool mute)
+- public bool PinUserOnScreen(int userId, int screenIndex = 0)
+- public bool UnpinUserFromScreen(int userId, int screenIndex = 0)
+- public bool ControlUserCamera(int userId, int action, int type)
+- public bool ControlCamera(string deviceId, int action, int type)
+- public bool ChangeSmartCameraMode(int mask, string deviceId = "")
+- public CameraDevice GetCurrentCamera()
+- public bool SetCurrentCamera(string deviceId)
+- public bool SetCameraPreset(uint index, string deviceId)
+- public bool GoToCameraPreset(uint index, string deviceId)
+- public bool NameCameraPreset(uint index, string name, string deviceId)
+- public int SetScreenLayout(int screen, int layoutSourceType)
+- public int SetVideoOrder(int videoOrderType)
+- public int SetDynamicLayoutOption(int layout)
+- public int UpdateVideoLayoutStyle(int videoLayoutStyle)
+- public int ControlVideoPosition(int position, int size)
+- public int TurnVideoPage(bool forward, int pageVideoType)
+- public int ChangeThumbnailsPosition(int type)
+- public int SwitchToFloatingShareForSingleScreen(bool floatingShare)
+- public bool StartRecording()
+- public bool StopRecording()
+- public bool PauseRecording()
+- public bool ResumeRecording()
+- public bool ResponseToRecordingRequest(bool accept, bool acceptAlways = false)
+- public int GetParticipantCount()
+- public bool ExpelUser(int userId)
+- public bool AssignHost(int userId)
+- public bool StopShare()
+- public bool LaunchSharingMeeting(bool isInLocalShare, int displayState)
+- public bool SwitchFromLocalPresentationToNormalMeeting()
+- public bool ShowSharingInstruction(bool show, int instructionState)
+- public bool ShareBlackMagic(bool isStart, bool isViewLocally)
+- public bool AdmitUserFromWaitingRoom(int userId)
+- public bool AdmitAllFromWaitingRoom()
+- public bool PutUserInWaitingRoom(int userId)
+- public bool TerminateSipCall(string callId)
+- public bool CallSip(string uri)
+- public bool SendDtmfToSipCall(string dtmf, string callId)
+- public bool CallOutPstnUser(string phoneNumber, bool cancelCall, bool hasVoicePrompt)
+- public bool SubscribeContacts(int startIndex, int count, bool searchSip)
+- public bool InviteAttendees(string[] contactIds)
+- public bool MeetWithIMUsers(string[] contactIds)
+- public bool ListMeeting()
+- public bool IsZrcsEnabled()
+- public void Dispose()
+- public void RunHealthCheck(string reason)
+- public void SetOnline(bool online)
+<!-- END Public Methods -->
+<!-- START Bool Feedbacks -->
+### Bool Feedbacks
+
+- ControllingFarEndCameraFeedback
+- SelfviewIsOnFeedback
+- CurrentDirectoryResultIsNotDirectoryRoot
+- CameraIsOffFeedback
+- CameraIsMutedFeedback
+- CameraAutoModeIsOnFeedback
+- ReceivingContent
+- PhoneOffHookFeedback
+- LayoutViewIsOnFirstPageFeedback
+- LayoutViewIsOnLastPageFeedback
+- CanSwapContentWithThumbnailFeedback
+- ContentSwappedWithThumbnailFeedback
+- MeetingIsLockedFeedback
+- MeetingIsRecordingFeedback
+- RecordConsentPromptIsVisible
+<!-- END Bool Feedbacks -->
+<!-- START Int Feedbacks -->
+### Int Feedbacks
+
+- NumberOfScreensFeedback
+<!-- END Int Feedbacks -->
+<!-- START String Feedbacks -->
+### String Feedbacks
+
+- SelectedCameraFeedback
+- SelfviewPipPositionFeedback
+- SelfviewPipSizeFeedback
+- CallerIdNameFeedback
+- CallerIdNumberFeedback
+- LocalLayoutFeedback
+<!-- END String Feedbacks -->
