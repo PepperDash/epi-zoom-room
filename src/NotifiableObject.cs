@@ -1,7 +1,8 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using PepperDash.Core;
+using Serilog.Events;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins
 {
     public abstract class NotifiableObject : INotifyPropertyChanged
 	{
@@ -18,7 +19,7 @@ namespace PDT.Plugins.Zoom.Room
             }
             else
             {
-                Debug.Console(2, "PropertyChanged event is NULL");
+                Debug.LogMessage(LogEventLevel.Debug, "PropertyChanged event is NULL");
             }
 		}
 

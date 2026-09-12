@@ -1,8 +1,9 @@
 using System;
 using Newtonsoft.Json;
 using PepperDash.Core;
+using Serilog.Events;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// zConfiguration class structure
@@ -24,7 +25,7 @@ namespace PDT.Plugins.Zoom.Room
                 get { return _mute; }
                 set
                 {
-                    Debug.Console(1, "Camera Mute response received: {0}", value);
+                    Debug.LogMessage(LogEventLevel.Information, "Camera Mute response received: {Value}", value);
 
                     if (value == _mute) return;
 
@@ -55,14 +56,23 @@ namespace PDT.Plugins.Zoom.Room
             }
         }
 
+        // Values must be distinct bit positions -- these are combined with | and tested with HasFlag().
+        // (Previous sequential values 1,2,3,4,5,6 collided under bitwise OR, e.g. Thumbnail(3) == Gallery(1)|Speaker(2),
+        // causing layouts to spuriously report as available.)
         [Flags]
         public enum eLayoutStyle
         {
             None = 0,
-            Gallery = 1,
-            Speaker = 2,
-            Strip = 4,
-            ShareAll = 8,
+            Gallery = 1 << 0,
+            Speaker = 1 << 1,
+            Thumbnail = 1 << 2,
+            ContentOnly = 1 << 3,
+            CancelContentOnly = 1 << 4,
+            Dynamic = 1 << 5,
+            /// <summary>Zoom Room controller UI "Multi-Speaker" layout (no dedicated SDK ScreenLayoutSourceType; reported as -1; SetScreenLayout(-1) is ignored by the SDK).</summary>
+            MultiSpeaker = 1 << 6,
+            /// <summary>Zoom Room controller UI "Thumbnail &amp; Share" layout, shown while content is shared (SDK ScreenLayoutSourceType.ThumbnailShareView).</summary>
+            ThumbnailAndShare = 1 << 7,
         }
 
         public enum eLayoutSize

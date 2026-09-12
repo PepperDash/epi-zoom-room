@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Devices.Common.VideoCodec;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Defines the requirements for Zoom Room layout control
@@ -22,10 +22,15 @@ namespace PDT.Plugins.Zoom.Room
 
         void GetAvailableLayouts(); // Mot sure this is necessary if we're already subscribed to zStatus Call Layout
         void SetLayout(zConfiguration.eLayoutStyle layoutStyle);
+        void SetVideoOrder(string videoOrderCommand);
+        void SetThumbnailsPosition(string thumbnailsPositionCommand);
         void SwapContentWithThumbnail();
 
         void LayoutTurnNextPage();
         void LayoutTurnPreviousPage();
+
+        string CurrentVideoOrder { get; }
+        string CurrentThumbnailsPosition { get; }
     }
 
     public class LayoutInfoChangedEventArgs : EventArgs

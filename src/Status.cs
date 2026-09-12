@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace PDT.Plugins.Zoom.Room
+namespace PepperDash.Essentials.Plugins
 {
     public class Status
     {
